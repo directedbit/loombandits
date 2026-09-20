@@ -1,5 +1,5 @@
 // Team settings: roster and game parameters. Persisted on the device between games.
-import type { Player } from '../engine';
+import type { Player, RotationScope } from '../engine';
 
 export interface Settings {
   teamName: string;
@@ -10,9 +10,13 @@ export interface Settings {
   swapSize: number;
   /** Fixed sub interval in seconds; null lets the engine choose. */
   intervalSeconds: number | null;
+  /** 'period': everyone gets field and bench time in every period. */
+  rotationScope: RotationScope;
 }
 
-const KEY = 'lb.settings.v1';
+const KEY = 'lb.settings.v2';
+const LEGACY_KEY = 'lb.settings.v1';
+const LEGACY_DEFAULT_NAMES = ['Immy', 'Rosie', 'Tilly', 'Annie'];
 
 export function newId(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -22,20 +26,37 @@ export function newId(): string {
 
 export const DEFAULT_SETTINGS: Settings = {
   teamName: 'Loom Bandits',
-  players: ['Immy', 'Rosie', 'Tilly', 'Annie'].map((name) => ({ id: newId(), name })),
-  periods: 4,
+  players: ['Rosie', 'Tilly', 'Immy', 'Annie', 'Ella', 'Harper', 'Flora', 'Kenzie'].map((name) => ({
+    id: newId(),
+    name,
+  })),
+  periods: 2,
   periodMinutes: 10,
   onField: 7,
   swapSize: 2,
   intervalSeconds: null,
+  rotationScope: 'period',
 };
 
 function load(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return DEFAULT_SETTINGS;
-    const parsed = JSON.parse(raw) as { version: number; settings: Settings };
-    return { ...DEFAULT_SETTINGS, ...parsed.settings };
+    if (raw) {
+      const parsed = JSON.parse(raw) as { version: number; settings: Partial<Settings> };
+      return { ...DEFAULT_SETTINGS, ...parsed.settings };
+    }
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    if (legacy) {
+      const parsed = JSON.parse(legacy) as { version: number; settings: Partial<Settings> };
+      const names = (parsed.settings.players ?? []).map((p) => p.name);
+      const untouchedRoster =
+        names.length === LEGACY_DEFAULT_NAMES.length &&
+        names.every((n, i) => n === LEGACY_DEFAULT_NAMES[i]);
+      // A v1 install that never edited the roster gets the new defaults wholesale;
+      // real edits are kept and only the new fields are filled in.
+      return untouchedRoster ? DEFAULT_SETTINGS : { ...DEFAULT_SETTINGS, ...parsed.settings };
+    }
+    return DEFAULT_SETTINGS;
   } catch {
     return DEFAULT_SETTINGS;
   }
@@ -43,7 +64,7 @@ function load(): Settings {
 
 function save(value: Settings): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ version: 1, settings: value }));
+    localStorage.setItem(KEY, JSON.stringify({ version: 2, settings: value }));
   } catch {
     // Storage unavailable (private mode, quota): keep working in memory.
   }

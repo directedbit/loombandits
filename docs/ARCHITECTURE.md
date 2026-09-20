@@ -119,15 +119,15 @@ Design notes: portrait phone first; cards ≥ 56 px tall; two colours of highlig
 5. Summary screen and copy-to-text.
 6. Should-haves: pinned players, period-break alignment, projections, history.
 
-## 8. Next: rotation scope and adaptive timing (REQUIREMENTS F2.5, F4.9)
+## 8. Rotation scope and adaptive timing (REQUIREMENTS F2.5, F4.9)
 
-Engine changes, all pure and unit-tested:
+Implemented in the engine, all pure and unit-tested:
 
-- `GameConfig.rotationScope: 'game' | 'period'`; `GameState.inPlaySubsThisPeriod` counter,
-  reset on `PeriodStarted`, incremented on `SubMade` while running or paused.
-- `PlayerClock.playedThisPeriodMs`, reset on `PeriodStarted`, settled like `playedMs`.
-- `schedule.ts`: `subsPerPeriod(config, available)` per scope; `nextSubDueGameMs(state)` =
-  the adaptive formula, replacing `subAnchorGameMs + intervalMs`.
-- `fairness.ts`: sort key becomes `[scopeMinutes, gameMinutes, stint]`.
-- Settings UI: scope toggle plus the computed "subs per period / every m:ss" readout with a
-  warning under two minutes.
+- `GameConfig.rotationScope: 'game' | 'period'` (older saved games normalise to `'game'`).
+- `GameState.periodStartGameMs`, `GameState.inPlaySubsThisPeriod` (reset on `PeriodStarted`,
+  incremented on `SubMade` while running or paused) and `PlayerClock.periodPlayedMs`.
+- `schedule.ts`: `effectiveSwapSize`, `subsPerPeriod` per scope, `plannedIntervalMs`.
+- `derive.ts`: `nextSubDueGameMs` = anchor + (period end − anchor) / (remaining in-play subs + 1);
+  queues sort by `[scope minutes, game minutes, stint]`; `fairnessBoundMs`.
+- Settings UI: rotation select plus a "subs a period / about every m:ss" readout with a warning
+  under two minutes. Settings storage moved to `lb.settings.v2` with a one-off migration.

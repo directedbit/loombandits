@@ -26,10 +26,12 @@
 
 <div class="card" class:on={badge === 'on'} class:off={badge === 'off'} class:expanded>
   <button class="face" onclick={onToggle} aria-expanded={expanded}>
-    {#if rank !== null}
-      <span class="rank">{rank}</span>
-    {/if}
-    <span class="name">{name}</span>
+    <span class="top">
+      {#if rank !== null}
+        <span class="rank">{rank}</span>
+      {/if}
+      <span class="name">{name}</span>
+    </span>
     <span class="time mono">{formatClock(playedMs)}</span>
   </button>
   {#if badge}
@@ -60,23 +62,36 @@
   }
   .face {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
     width: 100%;
     min-height: 60px;
     border: 0;
     border-radius: 0;
     background: transparent;
-    padding: 8px 12px;
+    padding: 8px 10px 6px;
     text-align: left;
+  }
+  .top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding-right: 4px;
+  }
+  /* Keep the name clear of the NEXT ON / NEXT OFF badge in the corner. */
+  .card.on .top,
+  .card.off .top {
+    padding-right: 64px;
   }
   .rank {
     flex: none;
-    width: 26px;
-    height: 26px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     border: 2px solid var(--line);
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     display: grid;
     place-items: center;
     color: var(--muted);
@@ -84,15 +99,14 @@
   .name {
     flex: 1;
     min-width: 0;
-    font-size: 1.15rem;
+    font-size: 1.1rem;
     font-weight: 700;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
   }
   .time {
-    flex: none;
-    font-size: 1rem;
+    align-self: flex-end;
+    font-size: 0.95rem;
     color: var(--muted);
     font-weight: 600;
   }

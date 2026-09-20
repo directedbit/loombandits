@@ -10,6 +10,9 @@ export interface Player {
 /** Where a player is right now: on the field, on the sideline, or not playing today. */
 export type Location = 'field' | 'bench' | 'out';
 
+/** Judge fairness over the whole game, or afresh in every period. */
+export type RotationScope = 'game' | 'period';
+
 export interface GameConfig {
   teamName: string;
   /** Number of playing periods (halves = 2, quarters = 4). */
@@ -22,6 +25,8 @@ export interface GameConfig {
   swapSize: number;
   /** Fixed substitution interval in seconds, or null to let the engine choose. */
   intervalSeconds: number | null;
+  /** 'period': everyone gets field and bench time in every period. */
+  rotationScope: RotationScope;
 }
 
 export type Phase = 'pre' | 'running' | 'paused' | 'break' | 'finished';
@@ -45,8 +50,10 @@ export type GameEvent =
   | { type: 'ConfigChanged'; at: number; config: GameConfig };
 
 export interface PlayerClock {
-  /** Settled playing time in ms (excludes the currently running segment). */
+  /** Settled playing time this game in ms (excludes the currently running segment). */
   playedMs: number;
+  /** Settled playing time in the current period. Reset when a period starts. */
+  periodPlayedMs: number;
   /** Number of spells on the field. */
   stints: number;
   /** Game-clock ms at which the player last changed location. */
@@ -63,12 +70,14 @@ export interface GameState {
   period: number;
   /** Game-clock ms accumulated by completed periods. */
   completedPeriodsMs: number;
+  /** Game-clock ms at which the current period started. */
+  periodStartGameMs: number;
   /** Settled ms elapsed in the current period. */
   periodElapsedMs: number;
   /** Wall-clock ms when the clock last started running, or null when stopped. */
   runningSince: number | null;
-  /** Game-clock ms of the last substitution or period start. */
+  /** Game-clock ms of the last substitution or period start: the plan is re-spread from here. */
   subAnchorGameMs: number;
-  /** Effective substitution interval in ms, resolved at the last anchor. */
-  intervalMs: number;
+  /** Substitutions made while the clock was live in this period. */
+  inPlaySubsThisPeriod: number;
 }

@@ -1,12 +1,18 @@
 // Read-only views over GameState at a given wall-clock instant. Nothing here mutates.
 import type { GameState, Location, PlayerId } from './types';
 import { gameElapsedMs } from './reducer';
-import { MINUTE_MS, totalGameMs } from './schedule';
+import {
+  effectiveSwapSize,
+  periodMs,
+  plannedIntervalMs,
+  subsPerPeriod,
+  totalGameMs,
+} from './schedule';
 
 export { gameElapsedMs };
 
 export function periodLengthMs(state: GameState): number {
-  return state.config.periodMinutes * MINUTE_MS;
+  return periodMs(state.config);
 }
 
 export function periodElapsedMs(state: GameState, now: number): number {
@@ -24,14 +30,27 @@ export function gameRemainingMs(state: GameState, now: number): number {
   return Math.max(0, totalGameMs(state.config) - gameElapsedMs(state, now));
 }
 
+function runningMs(state: GameState, id: PlayerId, now: number): number {
+  return state.runningSince !== null && state.location[id] === 'field'
+    ? Math.max(0, now - state.runningSince)
+    : 0;
+}
+
 export function totalPlayedMs(state: GameState, id: PlayerId, now: number): number {
   const clock = state.clocks[id];
-  if (!clock) return 0;
-  const running =
-    state.runningSince !== null && state.location[id] === 'field'
-      ? Math.max(0, now - state.runningSince)
-      : 0;
-  return clock.playedMs + running;
+  return clock ? clock.playedMs + runningMs(state, id, now) : 0;
+}
+
+export function periodPlayedMs(state: GameState, id: PlayerId, now: number): number {
+  const clock = state.clocks[id];
+  return clock ? clock.periodPlayedMs + runningMs(state, id, now) : 0;
+}
+
+/** The minutes fairness is judged on: this period's in period scope, the game's otherwise. */
+export function scopePlayedMs(state: GameState, id: PlayerId, now: number): number {
+  return state.config.rotationScope === 'period'
+    ? periodPlayedMs(state, id, now)
+    : totalPlayedMs(state, id, now);
 }
 
 /** How long the player has been where they are now, in game-clock ms. */
@@ -39,16 +58,6 @@ export function currentStintMs(state: GameState, id: PlayerId, now: number): num
   const clock = state.clocks[id];
   if (!clock) return 0;
   return Math.max(0, gameElapsedMs(state, now) - clock.stintStartGameMs);
-}
-
-/** Ms until the next substitution is due; negative when overdue; null before kick-off. */
-export function subCountdownMs(state: GameState, now: number): number | null {
-  if (state.phase === 'pre' || state.phase === 'finished') return null;
-  if (state.phase === 'break') {
-    // A swap at the break is free: due until the coach makes one.
-    return state.subAnchorGameMs < state.completedPeriodsMs ? 0 : state.intervalMs;
-  }
-  return state.subAnchorGameMs + state.intervalMs - gameElapsedMs(state, now);
 }
 
 export function playersAt(state: GameState, where: Location): PlayerId[] {
@@ -59,6 +68,44 @@ export function availableCount(state: GameState): number {
   return state.players.filter((p) => state.location[p.id] !== 'out').length;
 }
 
+/** Substitution slots per period for the players available right now. */
+export function subsPerPeriodNow(state: GameState): number {
+  return subsPerPeriod(state.config, availableCount(state));
+}
+
+/** Time between subs when nothing goes wrong, for the players available right now. */
+export function plannedIntervalNowMs(state: GameState): number {
+  return plannedIntervalMs(state.config, availableCount(state));
+}
+
+/**
+ * Game-clock ms at which the next substitution is due. The subs still to come in this
+ * period are spread evenly over the time left since the last anchor, so lost time is
+ * shared out rather than landing on the last stint. Null before kick-off and after full time.
+ */
+export function nextSubDueGameMs(state: GameState): number | null {
+  if (state.phase === 'pre' || state.phase === 'finished') return null;
+  const P = periodLengthMs(state);
+  const K = subsPerPeriodNow(state);
+  if (state.phase === 'break') {
+    // A swap at the break is free: due until the coach makes one, then the first stint of
+    // the next period.
+    const swapped = state.subAnchorGameMs >= state.completedPeriodsMs;
+    return swapped ? state.completedPeriodsMs + Math.round(P / K) : state.completedPeriodsMs;
+  }
+  const end = state.periodStartGameMs + P;
+  const remainingInPlay = Math.max(0, K - 1 - state.inPlaySubsThisPeriod);
+  if (remainingInPlay === 0) return end;
+  const anchor = state.subAnchorGameMs;
+  return Math.round(anchor + (end - anchor) / (remainingInPlay + 1));
+}
+
+/** Ms until the next substitution is due; negative when overdue; null before kick-off. */
+export function subCountdownMs(state: GameState, now: number): number | null {
+  const due = nextSubDueGameMs(state);
+  return due === null ? null : due - gameElapsedMs(state, now);
+}
+
 /** The fair share of field time each available player should end the game with. */
 export function targetPlayedMs(state: GameState): number {
   const n = availableCount(state);
@@ -66,20 +113,33 @@ export function targetPlayedMs(state: GameState): number {
   return (Math.min(state.config.onField, n) * totalGameMs(state.config)) / n;
 }
 
-/** On-field players, most-played first; ties broken by longest current stint. */
+/** Greedy min–max keeps everyone within one bench stint: this many ms. */
+export function fairnessBoundMs(state: GameState): number {
+  const n = availableCount(state);
+  const onField = Math.min(state.config.onField, n);
+  const bench = n - onField;
+  const swap = effectiveSwapSize(state.config, n);
+  return Math.ceil(Math.max(1, bench) / swap) * plannedIntervalNowMs(state);
+}
+
+/** On-field players, most-played first (scope minutes, then game minutes, then stint). */
 export function nextOffQueue(state: GameState, now: number): PlayerId[] {
-  return playersAt(state, 'field').sort((a, b) => {
-    const d = totalPlayedMs(state, b, now) - totalPlayedMs(state, a, now);
-    return d !== 0 ? d : currentStintMs(state, b, now) - currentStintMs(state, a, now);
-  });
+  return playersAt(state, 'field').sort(
+    (a, b) =>
+      scopePlayedMs(state, b, now) - scopePlayedMs(state, a, now) ||
+      totalPlayedMs(state, b, now) - totalPlayedMs(state, a, now) ||
+      currentStintMs(state, b, now) - currentStintMs(state, a, now),
+  );
 }
 
 /** Sideline players, least-played first; ties broken by longest time on the bench. */
 export function nextOnQueue(state: GameState, now: number): PlayerId[] {
-  return playersAt(state, 'bench').sort((a, b) => {
-    const d = totalPlayedMs(state, a, now) - totalPlayedMs(state, b, now);
-    return d !== 0 ? d : currentStintMs(state, b, now) - currentStintMs(state, a, now);
-  });
+  return playersAt(state, 'bench').sort(
+    (a, b) =>
+      scopePlayedMs(state, a, now) - scopePlayedMs(state, b, now) ||
+      totalPlayedMs(state, a, now) - totalPlayedMs(state, b, now) ||
+      currentStintMs(state, b, now) - currentStintMs(state, a, now),
+  );
 }
 
 export interface Swap {

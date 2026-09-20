@@ -2,10 +2,11 @@
 // start of a game, make a sub, reload, go offline, read the summary. Screenshots land in
 // e2e/screenshots/. Fails on any page error or unexpected screen.
 import { chromium } from 'playwright';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
 
 const base = process.env.BASE_URL ?? 'http://localhost:4173/loombandits/';
 const shots = 'e2e/screenshots';
+await rm(shots, { recursive: true, force: true });
 await mkdir(shots, { recursive: true });
 
 const browser = await chromium.launch({ channel: process.env.CHROME_CHANNEL ?? 'chrome' });
@@ -41,9 +42,12 @@ await page.goto(base);
 await expect(page.getByRole('button', { name: 'New game' }), 'start screen');
 await shot('start');
 
-// Settings: a nine-player squad, seven on the field, two per sub.
+// Settings: a nine-player squad (eight defaults plus one), seven on the field, two per sub.
 await page.getByRole('link', { name: 'Settings', exact: true }).click();
-for (const name of ['Maya', 'Zoe', 'Ella', 'Ivy', 'Lucy']) {
+await expect(page.getByLabel('Rotation'), 'rotation setting');
+await expect(page.getByText(/subs a period/), 'sub plan readout');
+await shot('settings-top');
+for (const name of ['Maya']) {
   await page.getByPlaceholder('Add a player').fill(name);
   await page.getByRole('button', { name: 'Add', exact: true }).click();
 }
@@ -76,7 +80,7 @@ await expect(page.getByText('Not playing 0'), 'undo restored her');
 
 // Kick off, let the clock run, sub early.
 await page.getByRole('button', { name: 'Start period 1' }).click();
-await expect(page.getByText('Period 1 of 4'), 'running header');
+await expect(page.getByText(/Period 1 of \d/), 'running header');
 await page.waitForTimeout(1500);
 await expect(page.getByText('NEXT ON'), 'next-on badge');
 await expect(page.getByText('NEXT OFF'), 'next-off badge');
@@ -87,13 +91,13 @@ await shot('after-sub');
 
 // State survives a reload.
 await page.reload();
-await expect(page.getByText('Period 1 of 4'), 'game restored after reload');
+await expect(page.getByText(/Period 1 of \d/), 'game restored after reload');
 
 // Works offline once the service worker is in charge.
 await page.evaluate(() => navigator.serviceWorker.ready);
 await ctx.setOffline(true);
 await page.reload();
-await expect(page.getByText('Period 1 of 4'), 'game loads offline');
+await expect(page.getByText(/Period 1 of \d/), 'game loads offline');
 await shot('offline');
 await ctx.setOffline(false);
 

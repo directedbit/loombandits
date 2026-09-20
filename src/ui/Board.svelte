@@ -118,10 +118,12 @@
 <style>
   .board {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    /* minmax(0, …) so a long name shrinks and ellipsises instead of widening the column */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 10px;
   }
   .col {
+    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 8px;

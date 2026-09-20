@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { formatClock, resolveIntervalMs } from '../engine';
+  import {
+    FREQUENT_SUB_WARNING_MS,
+    formatClock,
+    plannedIntervalMs,
+    subsPerPeriod,
+    type RotationScope,
+  } from '../engine';
   import { game } from '../store/game.svelte';
   import { settings } from '../store/settings.svelte';
 
@@ -15,9 +21,11 @@
     newName = '';
   }
 
-  const autoIntervalMs = $derived(
-    resolveIntervalMs({ ...s, intervalSeconds: null }, s.players.length),
-  );
+  const available = $derived(s.players.length);
+  const autoIntervalMs = $derived(plannedIntervalMs({ ...s, intervalSeconds: null }, available));
+  const slots = $derived(subsPerPeriod(s, available));
+  const intervalMs = $derived(plannedIntervalMs(s, available));
+  const bench = $derived(Math.max(0, available - s.onField));
   const inGame = $derived(game.state !== null && game.state.phase !== 'finished');
 
   function applyToGame() {
@@ -32,6 +40,7 @@
         onField: s.onField,
         swapSize: s.swapSize,
         intervalSeconds: s.intervalSeconds,
+        rotationScope: s.rotationScope,
       },
     });
     location.hash = '#/game';
@@ -97,6 +106,18 @@
         />
       </label>
     </div>
+
+    <label class="row">
+      <span>Rotation</span>
+      <select
+        value={s.rotationScope}
+        onchange={(e) => settings.update({ rotationScope: e.currentTarget.value as RotationScope })}
+      >
+        <option value="period">Equal time each period — everyone on and off every half</option>
+        <option value="game">Equal time over the whole game</option>
+      </select>
+    </label>
+
     <label class="row">
       <span>Sub interval</span>
       <select
@@ -130,9 +151,23 @@
         />
       </label>
     {/if}
+
+    <p class="readout">
+      {#if bench === 0}
+        Nobody on the bench with {available} players and {s.onField} on the field, so no substitutions.
+      {:else}
+        <strong>{slots - 1} {slots === 2 ? 'sub' : 'subs'} a period</strong> plus the swap at the
+        break, about every <strong>{formatClock(intervalMs)}</strong>.
+        {#if intervalMs < FREQUENT_SUB_WARNING_MS}
+          <span class="warn">
+            That is very frequent. A bigger swap size or fewer on the field would calm it down.
+          </span>
+        {/if}
+      {/if}
+    </p>
     <p class="muted small">
-      Auto splits each period into equal chunks of at most 6 minutes, with enough subs for everyone
-      to rotate. Who comes off and on is always worked out from minutes played.
+      Times re-plan after every sub: if one happens late or early, the rest of the period is
+      re-spread evenly. Who comes off and on is always worked out from minutes played.
     </p>
   </fieldset>
 
@@ -183,6 +218,8 @@
 
 <style>
   fieldset {
+    /* UA default min-inline-size: min-content lets a wide <select> push the box off-screen. */
+    min-inline-size: 0;
     border: 2px solid var(--line);
     border-radius: 14px;
     padding: 10px 12px 12px;
@@ -197,13 +234,14 @@
   }
   .grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 10px;
   }
   label {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    min-width: 0;
   }
   label span {
     font-size: 0.9rem;
@@ -215,6 +253,9 @@
   select {
     font: inherit;
     min-height: 48px;
+    width: 100%;
+    max-width: 100%;
+    text-overflow: ellipsis;
     border-radius: 10px;
     border: 2px solid var(--line);
     background: var(--card);
@@ -237,6 +278,7 @@
   .players li input,
   .add input {
     flex: 1;
+    min-width: 0;
   }
   .players li button {
     flex: none;
@@ -253,5 +295,17 @@
   }
   .small {
     font-size: 0.9rem;
+  }
+  .readout {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--out-bg);
+  }
+  .warn {
+    display: block;
+    margin-top: 4px;
+    color: var(--danger);
+    font-weight: 600;
   }
 </style>

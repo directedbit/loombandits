@@ -1,6 +1,6 @@
 # Loom Bandits Sub Tracker — Requirements
 
-Status: **v1 prototype built** (2026-09-20). Must-haves are implemented; should-haves are open.
+Status: **v1.1 built** (2026-09-20). Must-haves including F2.5 and F4.9 are implemented; should-haves are open.
 
 ## 1. Purpose
 
@@ -120,11 +120,15 @@ looks at the current totals, never at a pre-baked schedule.
   `K = max(ceil(ceil(N / S) / periods), ceil(P / 6 min))`, i.e. chunks of at most six
   minutes with enough subs over the game for everyone to have come off once.
 - _Period_ ("everyone on and off each half"): fairness is judged on minutes in the current
-  period, whole-game minutes as tie-break. Subs per period `K = ceil(max(F, B) / S)`, which
-  is exactly enough for every starter to come off and every bench player to come on within
-  the period. With 7 on the field and 2 per sub that is 4 subs a period; in a 10-minute
-  quarter that means a sub every 2:30, in a 25-minute half every 6:15. Settings shows this
-  number so the coach can trade swap size against sub frequency.
+  period, whole-game minutes as tie-break. With `S_eff = min(S, B, F)` players actually
+  moved per sub, subs per period `K = ceil(F / S_eff) + 1`: the `K − 1` in-play subs take
+  every starter off during the period (and so bring every bench player on), and the `K`-th
+  is the swap at the break. With 7 on the field and 2 per sub that is 4 in-play subs a
+  period: every 2:00 in a 10-minute quarter, every 4:00 in a 20-minute half. With only one
+  on the bench it is 7 in-play subs a period. Settings shows this number so the coach can
+  trade swap size against sub frequency, and warns under two minutes.
+- _Fixed interval_ (either scope): `K = round(P / interval)`, so the interval is rounded to
+  fit whole stints into the period.
 
 **When (adaptive).** The _K_-th sub of a period is the free swap at the break, so there
 are `K − 1` in-play subs. At every anchor (period start, any sub, any move, config change)
@@ -161,7 +165,7 @@ tighten the final spread further.
    distort others' targets retroactively.
 4. Undoing a sub restores exact totals.
 5. After a sub made δ late, the remaining subs in the period are re-spread: each remaining
-   stint is longer by δ / (remaining stints), and the final spread is unchanged.
+   stint is shorter by δ / (remaining stints), and the final spread stays within the bound.
 6. In period scope, every available player has field time and bench time in every period
    (given bench ≥ 1), and per-period spread ≤ one bench stint.
 

@@ -42,6 +42,7 @@
         onField: s.onField,
         swapSize: s.swapSize,
         intervalSeconds: s.intervalSeconds,
+        rotationScope: s.rotationScope,
       },
       players: s.players,
       location,
