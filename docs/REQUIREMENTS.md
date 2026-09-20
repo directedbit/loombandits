@@ -45,12 +45,13 @@ Priority: **M** must have for v1, **S** should have, **C** could have.
 
 ### F2 Game setup
 
-| ID   | Pri | Requirement                                                                                                                                      |
-| ---- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| F2.1 | M   | Parameters: number of periods, period length (minutes), players on the field, players swapped per substitution, substitution interval (minutes). |
-| F2.2 | M   | The app proposes a default substitution interval (see §5) which the coach can override.                                                          |
-| F2.3 | M   | The app proposes a starting line-up; the coach can change it by moving cards before kick-off.                                                    |
-| F2.4 | S   | Setup values are remembered as a preset so next week's game is one tap.                                                                          |
+| ID   | Pri | Requirement                                                                                                                                                                                                                                                                                                                                                     |
+| ---- | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F2.1 | M   | Parameters: number of periods, period length (minutes), players on the field, players swapped per substitution, substitution interval (minutes).                                                                                                                                                                                                                |
+| F2.2 | M   | The app proposes a default substitution interval (see §5) which the coach can override.                                                                                                                                                                                                                                                                         |
+| F2.3 | M   | The app proposes a starting line-up; the coach can change it by moving cards before kick-off.                                                                                                                                                                                                                                                                   |
+| F2.4 | S   | Setup values are remembered as a preset so next week's game is one tap.                                                                                                                                                                                                                                                                                         |
+| F2.5 | M   | **Rotation scope:** _whole game_ (default) or _each period_. In each-period mode every available player gets both field time and bench time in every period, and fairness is judged on minutes within the period; whole-game minutes break ties. Settings shows the resulting interval and warns when it drops under 2 minutes (suggesting a bigger swap size). |
 
 ### F3 Game clock
 
@@ -63,16 +64,18 @@ Priority: **M** must have for v1, **S** should have, **C** could have.
 
 ### F4 Playing time and substitution plan
 
-| ID   | Pri | Requirement                                                                                                                                                                                                                                                    |
-| ---- | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F4.1 | M   | For each available player track: total time on field this game, and length of the current stint (on field or on bench).                                                                                                                                        |
-| F4.2 | M   | **Fairness target:** at the final whistle every available player has played `players_on_field × total_game_time / available_players`, within one bench stint (`ceil(bench ÷ swap_size)` intervals). When the whole bench swaps each time this is one interval. |
-| F4.3 | M   | **Next-off queue:** on-field players ordered by most total time played (tie: longest current stint). **Next-on queue:** sideline players ordered by least total time played (tie: longest on bench). The top _S_ of each queue are the recommended swap.       |
-| F4.4 | M   | The next-sub countdown runs from the last sub (or period start). At zero the header shows **SUB NOW**, the phone vibrates where supported, and the overdue time keeps counting so the coach can see how late they are.                                         |
-| F4.5 | M   | **Do sub**: one tap executes the recommended swap. The coach can pick different players before confirming. Early or late subs simply re-time the next one.                                                                                                     |
-| F4.6 | M   | **Undo** the last action (wrong sub, accidental pause).                                                                                                                                                                                                        |
-| F4.7 | S   | Subs falling within ~45 s of a period end are pushed to the break, because a break swap costs nothing.                                                                                                                                                         |
-| F4.8 | S   | Show each player's **projected** end-of-game minutes so the coach can see the plan is fair before it happens.                                                                                                                                                  |
+| ID    | Pri | Requirement                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----- | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F4.1  | M   | For each available player track: total time on field this game, and length of the current stint (on field or on bench).                                                                                                                                                                                                                                                                            |
+| F4.2  | M   | **Fairness target:** at the end of the scope (game, or each period in each-period mode) every available player has played `players_on_field × scope_time / available_players`, within one bench stint (`ceil(bench ÷ swap_size)` intervals). When the whole bench swaps each time this is one interval.                                                                                            |
+| F4.3  | M   | **Next-off queue:** on-field players ordered by most total time played (tie: longest current stint). **Next-on queue:** sideline players ordered by least total time played (tie: longest on bench). The top _S_ of each queue are the recommended swap.                                                                                                                                           |
+| F4.4  | M   | The next-sub countdown runs to the next planned sub time (see §5, _When_). At zero the header shows **SUB NOW**, the phone vibrates where supported, and the overdue time keeps counting so the coach can see how late they are.                                                                                                                                                                   |
+| F4.5  | M   | **Do sub**: one tap executes the recommended swap. The coach can pick different players before confirming. Early or late subs simply re-time the next one.                                                                                                                                                                                                                                         |
+| F4.6  | M   | **Undo** the last action (wrong sub, accidental pause).                                                                                                                                                                                                                                                                                                                                            |
+| F4.7  | S   | Subs falling within ~45 s of a period end are pushed to the break, because a break swap costs nothing.                                                                                                                                                                                                                                                                                             |
+| F4.8  | S   | Show each player's **projected** end-of-game minutes so the coach can see the plan is fair before it happens.                                                                                                                                                                                                                                                                                      |
+| F4.9  | M   | **Adaptive timing.** The plan is recomputed after every event: late or early sub, coach override, injury, late arrival, clock correction, shortened period. The subs still to come in the period are re-spread evenly over the time left, so lost time is shared out rather than landing on the last stint. Who comes off and on is always taken from actual minutes, never from a pre-baked list. |
+| F4.10 | S   | **Levelling.** Where an even re-spread still leaves a projected imbalance, the next sub time is nudged so the outgoing players finish on their target share.                                                                                                                                                                                                                                       |
 
 ### F5 Board (main screen)
 
@@ -111,25 +114,44 @@ players with the least total playing time (tie-break: longest time on the bench)
 Greedy is robust to late arrivals, injuries and coach overrides because it only ever
 looks at the current totals, never at a pre-baked schedule.
 
-**When.** The interval is a setting. The app proposes a default so that the remaining
-game divides into whole rotations (a rotation = every player has come off once =
-`ceil(N / S)` subs):
+**Scope.** `rotationScope` is _game_ or _period_.
+
+- _Game_ (default): fairness is judged on whole-game minutes. Subs per period
+  `K = max(ceil(ceil(N / S) / periods), ceil(P / 6 min))`, i.e. chunks of at most six
+  minutes with enough subs over the game for everyone to have come off once.
+- _Period_ ("everyone on and off each half"): fairness is judged on minutes in the current
+  period, whole-game minutes as tie-break. Subs per period `K = ceil(max(F, B) / S)`, which
+  is exactly enough for every starter to come off and every bench player to come on within
+  the period. With 7 on the field and 2 per sub that is 4 subs a period; in a 10-minute
+  quarter that means a sub every 2:30, in a 25-minute half every 6:15. Settings shows this
+  number so the coach can trade swap size against sub frequency.
+
+**When (adaptive).** The _K_-th sub of a period is the free swap at the break, so there
+are `K − 1` in-play subs. At every anchor (period start, any sub, any move, config change)
+the engine recomputes:
 
 ```
-interval = R / (m × ceil(N / S))     with the smallest m such that interval ≤ 6 min
+k        = (K − 1) − in-play subs made this period        (remaining in-play subs)
+next sub = now + (P − elapsed_in_period) / (k + 1)         (k ≤ 0 → due at the break)
 ```
 
-Examples:
+The plan is therefore always "spread what is left evenly", never a fixed list of times.
 
-| N   | F   | S   | Game   | Default interval | Each player sits out             |
-| --- | --- | --- | ------ | ---------------- | -------------------------------- |
-| 8   | 5   | 2   | 40 min | 5 min (m = 2)    | 15 min total, in ~7.5 min blocks |
-| 10  | 7   | 1   | 40 min | 4 min (m = 1)    | 12 min total, one 12 min block   |
-| 9   | 7   | 2   | 40 min | 4 min (m = 2)    | ~9 min total                     |
+| Event                                                        | Fixed schedule (old)                     | Adaptive (F4.9)                                                                      |
+| ------------------------------------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------ |
+| Plan: 10-min period, K = 4 → subs at 2:30, 5:00, 7:30, break |                                          |                                                                                      |
+| First sub made 30 s late at 3:00                             | 5:30, 8:00, break — last stint only 2:00 | 5:20, 7:40, break — the 30 s is shared three ways                                    |
+| Coach subs early at 1:30                                     | 4:00, 6:30, 9:00, break — an extra stint | 4:20, 7:10, break — same number of subs, re-spread                                   |
+| Injury at 4:00, player marked not playing                    | who: field refilled from the bench       | same, and the shorter bench means K may drop; times re-spread                        |
+| Ref ends the period at 9:00                                  | —                                        | next period plans from actual minutes; short-changed players are top of the on-queue |
 
-Because _who_ is recomputed from totals every time, the interval only needs to be
-"about right"; the fairness bound in F4.2 still holds. Tightening the end-of-game spread
-further (an adaptive final sub time) is a should-have, tracked as F4.8.
+A _pause_ stops game time, so nothing is lost and nothing moves: subs are planned in
+game time, not wall-clock time.
+
+**Why greedy is enough.** Because _who_ is recomputed from actual minutes at every sub,
+the _when_ only needs to be sensible; the fairness bound in F4.2 holds even if the coach
+is late or early. Adaptive timing keeps stints similar in length; F4.10 (levelling) would
+tighten the final spread further.
 
 **Invariants to test.**
 
@@ -138,6 +160,10 @@ further (an adaptive final sub time) is a should-have, tracked as F4.8.
 3. Marking a player not-playing mid-game removes them from queues and does not
    distort others' targets retroactively.
 4. Undoing a sub restores exact totals.
+5. After a sub made δ late, the remaining subs in the period are re-spread: each remaining
+   stint is longer by δ / (remaining stints), and the final spread is unchanged.
+6. In period scope, every available player has field time and bench time in every period
+   (given bench ≥ 1), and per-period spread ≤ one bench stint.
 
 ## 6. Non-functional requirements
 
@@ -158,5 +184,5 @@ tracking, multiple teams, authentication.
 
 1. ~~Sport and defaults~~ — resolved: nothing is sport-specific; team, players on field, periods, period length and swap size are all set on the Settings screen.
 2. **Goalkeeper / fixed positions.** Is F1.4 needed for v1?
-3. **Period-break alignment** (F4.7): should the plan always prefer swapping at breaks?
+3. ~~Period-break alignment~~ — resolved: the last sub of each period is the free swap at the break (§5, _When_).
 4. **Season fairness** (F6.3): worth it, or is per-game fairness enough?
