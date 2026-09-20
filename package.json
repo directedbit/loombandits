@@ -1,0 +1,16 @@
+{
+  "name": "loombandits",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Fair substitution tracker for the Loom Bandits — offline-first PWA",
+  "scripts": {
+    "dev": "scripts/dev.sh",
+    "test": "scripts/test.sh",
+    "lint": "scripts/lint.sh",
+    "build": "scripts/build.sh",
+    "check": "scripts/check.sh",
+    "preview": "scripts/preview.sh"
+  },
+  "engines": { "node": ">=20.19" }
+}

@@ -1,0 +1,129 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1e1e1e;
+  --muted: #5f5f5f;
+  --line: #1e1e1e;
+  --card: #ffffff;
+  --field-bg: #eaf6ea;
+  --bench-bg: #fff7e0;
+  --out-bg: #f2f2f2;
+  --on: #06d6a0;
+  --off: #ffd166;
+  --danger: #c62828;
+  --due: #c62828;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121212;
+    --fg: #f2f2f2;
+    --muted: #b0b0b0;
+    --line: #f2f2f2;
+    --card: #1e1e1e;
+    --field-bg: #16301a;
+    --bench-bg: #33290f;
+    --out-bg: #1a1a1a;
+    --due: #ff6b6b;
+  }
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 18px;
+  line-height: 1.3;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+#app {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+button {
+  font: inherit;
+  font-weight: 600;
+  min-height: 48px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: var(--card);
+  color: var(--fg);
+  padding: 0 16px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+button:active {
+  transform: scale(0.98);
+}
+button.primary {
+  background: var(--fg);
+  color: var(--bg);
+}
+button.danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+button.ghost {
+  border-color: transparent;
+  background: transparent;
+  font-weight: 500;
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+input {
+  font: inherit;
+  min-height: 48px;
+  border-radius: 10px;
+  border: 2px solid var(--line);
+  background: var(--card);
+  color: var(--fg);
+  padding: 0 12px;
+  width: 100%;
+}
+h1,
+h2 {
+  margin: 0;
+}
+.screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+}
+.topnav {
+  display: flex;
+  border-bottom: 2px solid var(--line);
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.topnav a {
+  flex: 1;
+  text-align: center;
+  padding: 12px 4px;
+  color: var(--fg);
+  text-decoration: none;
+  font-weight: 600;
+  border-bottom: 4px solid transparent;
+}
+.topnav a.active {
+  border-bottom-color: var(--fg);
+}
+.muted {
+  color: var(--muted);
+}
+.mono {
+  font-variant-numeric: tabular-nums;
+}
