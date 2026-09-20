@@ -31,18 +31,49 @@ export const DEFAULT_SETTINGS: Settings = {
     name,
   })),
   periods: 2,
-  periodMinutes: 10,
-  onField: 7,
+  periodMinutes: 15,
+  onField: 5,
   swapSize: 2,
   intervalSeconds: null,
   rotationScope: 'period',
 };
+
+/** Earlier shipped defaults. A stored copy that still matches one of these was never edited. */
+const PREVIOUS_DEFAULTS: Array<Omit<Settings, 'players'> & { names: string[] }> = [
+  {
+    teamName: 'Loom Bandits',
+    names: ['Rosie', 'Tilly', 'Immy', 'Annie', 'Ella', 'Harper', 'Flora', 'Kenzie'],
+    periods: 2,
+    periodMinutes: 10,
+    onField: 7,
+    swapSize: 2,
+    intervalSeconds: null,
+    rotationScope: 'period',
+  },
+];
+
+function isUntouchedPreviousDefault(stored: Partial<Settings>): boolean {
+  const names = (stored.players ?? []).map((p) => p.name);
+  return PREVIOUS_DEFAULTS.some(
+    (d) =>
+      d.teamName === stored.teamName &&
+      d.periods === stored.periods &&
+      d.periodMinutes === stored.periodMinutes &&
+      d.onField === stored.onField &&
+      d.swapSize === stored.swapSize &&
+      (stored.intervalSeconds ?? null) === d.intervalSeconds &&
+      (stored.rotationScope ?? 'period') === d.rotationScope &&
+      names.length === d.names.length &&
+      names.every((n, i) => n === d.names[i]),
+  );
+}
 
 function load(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as { version: number; settings: Partial<Settings> };
+      if (isUntouchedPreviousDefault(parsed.settings)) return DEFAULT_SETTINGS;
       return { ...DEFAULT_SETTINGS, ...parsed.settings };
     }
     const legacy = localStorage.getItem(LEGACY_KEY);
