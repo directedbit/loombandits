@@ -136,6 +136,9 @@ export function formatClock(ms: number): string {
 export function summaryText(state: GameState, now: number): string {
   const lines = summary(state, now)
     .filter((p) => p.location !== 'out' || p.playedMs > 0)
-    .map((p) => `${p.name}: ${formatClock(p.playedMs)} (${p.stints} ${p.stints === 1 ? 'stint' : 'stints'})`);
+    .map(
+      (p) =>
+        `${p.name}: ${formatClock(p.playedMs)} (${p.stints} ${p.stints === 1 ? 'stint' : 'stints'})`,
+    );
   return [`${state.config.teamName} — playing time`, ...lines].join('\n');
 }

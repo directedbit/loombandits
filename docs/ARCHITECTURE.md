@@ -1,6 +1,6 @@
 # Loom Bandits Sub Tracker — Architecture
 
-Status: **proposed, for discussion** (2026-09-20). See `REQUIREMENTS.md` for what it must do.
+Status: **implemented as described** (2026-09-20). Deviations are noted inline. See `REQUIREMENTS.md` for what it must do.
 
 ## 1. Shape of the system
 
@@ -25,18 +25,18 @@ GitHub Pages.
 
 ## 2. Proposed stack
 
-| Concern | Choice | Why |
-|---------|--------|-----|
-| Language | TypeScript | Engine correctness matters; types catch time-unit mistakes. |
-| Build | Vite | Fast, simple, first-class PWA plugin, static output for Pages. |
-| UI | Svelte 5 | Reactive with very little boilerplate; small bundle (~10 KB runtime); good fit for a ticking clock and reorderable lists. |
-| PWA | vite-plugin-pwa (Workbox) | Generates manifest + service worker; `registerType: 'prompt'` so we never reload mid-game. |
-| State | Event log + reducer, in a small custom store | Time tracking is naturally event-based (every event has a timestamp); gives undo and exact summaries for free. |
-| Persistence | localStorage, JSON, schema-versioned with migrations | State is a few KB; IndexedDB is unnecessary. |
-| Unit tests | Vitest | Same config as Vite; fast; runs engine tests in Node. |
-| E2E smoke | Playwright (should-have, later) | One "play a full game offline" test in CI. |
-| Lint/format | ESLint + Prettier | Standard. |
-| CI/CD | GitHub Actions → GitHub Pages | Free, one workflow: check → build → deploy on push to `main`. |
+| Concern     | Choice                                               | Why                                                                                                                       |
+| ----------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Language    | TypeScript                                           | Engine correctness matters; types catch time-unit mistakes.                                                               |
+| Build       | Vite                                                 | Fast, simple, first-class PWA plugin, static output for Pages.                                                            |
+| UI          | Svelte 5                                             | Reactive with very little boilerplate; small bundle (~10 KB runtime); good fit for a ticking clock and reorderable lists. |
+| PWA         | vite-plugin-pwa (Workbox)                            | Generates manifest + service worker; `registerType: 'prompt'` so we never reload mid-game.                                |
+| State       | Event log + reducer, in a small custom store         | Time tracking is naturally event-based (every event has a timestamp); gives undo and exact summaries for free.            |
+| Persistence | localStorage, JSON, schema-versioned with migrations | State is a few KB; IndexedDB is unnecessary.                                                                              |
+| Unit tests  | Vitest                                               | Same config as Vite; fast; runs engine tests in Node.                                                                     |
+| E2E smoke   | Playwright driving the installed Chrome              | `scripts/e2e.sh`: squad setup, kick-off, sub, reload, offline reload, summary. Runs in CI.                                |
+| Lint/format | Prettier + `svelte-check`                            | Type-checks TS and Svelte together; ESLint deferred until it earns its config.                                            |
+| CI/CD       | GitHub Actions → GitHub Pages                        | Free, one workflow: check → build → deploy on push to `main`.                                                             |
 
 ### Alternatives considered
 

@@ -4,7 +4,10 @@ A phone-first, offline-capable web app that helps the coach of the Loom Bandits 
 the squad fairly. It runs the game clock, tracks each player's minutes, and shows who
 comes off, who goes on, and when — so every girl gets an even share of the game.
 
-**Status:** planning. See [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) and
+**Live app:** https://directedbit.github.io/loombandits/ — open it once on the phone, then
+"Add to Home Screen". It works with no signal after that.
+
+**Status:** v1 prototype. See [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) and
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## What it does
@@ -13,7 +16,18 @@ comes off, who goes on, and when — so every girl gets an even share of the gam
 - Each card shows a player's total time on the field.
 - Header shows time remaining in the period and a countdown to the next substitution.
 - The columns are ordered so reading top-down gives the sub order; one tap makes the sub.
+- Settings screen for team name, players, players on field, periods, period length and swap size.
 - Works with no signal once installed. All data stays on the phone.
+
+## How the maths works
+
+Who: at each sub the players with the most minutes come off and the players with the fewest
+go on. When: the interval is a setting; "auto" splits each period into equal chunks of at
+most six minutes with enough subs for everyone to rotate. Everyone finishes within one bench
+stint of each other. Details in the requirements doc, §5.
+
+Stack: Svelte 5 + TypeScript + Vite, `vite-plugin-pwa` for offline, Vitest for the engine
+tests, GitHub Actions → GitHub Pages. No backend.
 
 ## Running it
 

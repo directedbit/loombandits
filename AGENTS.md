@@ -29,19 +29,19 @@ run it without an agent**.
 
 ### Script catalogue
 
-| Script | What it does |
-|--------|--------------|
-| `scripts/setup.sh` | Install toolchain deps (`npm ci`). Run once after clone. |
-| `scripts/dev.sh` | Start the Vite dev server. |
-| `scripts/test.sh` | Run unit tests (Vitest). `--watch` to keep running. |
-| `scripts/lint.sh` | ESLint + Prettier check + `svelte-check`. `--fix` to auto-fix. |
-| `scripts/build.sh` | Production build to `dist/`. |
-| `scripts/check.sh` | Everything CI runs: lint, test, build. Run before every commit. |
-| `scripts/preview.sh` | Serve `dist/` locally to test the PWA/offline behaviour. |
-| `scripts/icons.sh` | Regenerate PWA icons from `public/icon.svg`. |
-| `scripts/deploy.sh` | Run `check.sh` then push `main`, which triggers the Pages deploy. |
-
-(The table lists the scripts the architecture calls for; tick them off as they land.)
+| Script                | What it does                                                                                    |
+| --------------------- | ----------------------------------------------------------------------------------------------- |
+| `scripts/setup.sh`    | Install toolchain deps (`npm ci`). Run once after clone.                                        |
+| `scripts/dev.sh`      | Start the Vite dev server (http://localhost:5173/loombandits/).                                 |
+| `scripts/test.sh`     | Run unit tests (Vitest). `--watch` to keep running.                                             |
+| `scripts/lint.sh`     | Prettier format check + `svelte-check` type check. `--fix` reformats.                           |
+| `scripts/build.sh`    | Production build to `dist/`, then enforces the 200 KB gzip budget.                              |
+| `scripts/check.sh`    | Everything CI runs: lint, test, build. Run before every commit.                                 |
+| `scripts/preview.sh`  | Build, then serve `dist/` locally to test the PWA/offline behaviour.                            |
+| `scripts/icons.sh`    | Regenerate PWA icons in `public/icons/` from `public/icon.svg`.                                 |
+| `scripts/e2e.sh`      | Browser smoke test of the built app in the installed Chrome; screenshots in `e2e/screenshots/`. |
+| `scripts/deploy.sh`   | Run `check.sh`, then push `main`; GitHub Actions publishes to Pages.                            |
+| `scripts/gh-setup.sh` | One-time: create the GitHub repo, push, switch Pages to Actions.                                |
 
 ## Rule 2: the engine stays pure
 

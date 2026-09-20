@@ -64,7 +64,12 @@ interface ScheduledChange {
  * Plays a whole game the way a diligent coach would: kick off each period, make the
  * recommended swap whenever the countdown hits zero, swap again at every break.
  */
-function simulate(cfg: GameConfig, squad: Player[], out: PlayerId[] = [], changes: ScheduledChange[] = []) {
+function simulate(
+  cfg: GameConfig,
+  squad: Player[],
+  out: PlayerId[] = [],
+  changes: ScheduledChange[] = [],
+) {
   const events: GameEvent[] = [created(cfg, squad, out)];
   let state = reduce(null, events[0]!);
   let now = T0 + 5 * MINUTE_MS;
@@ -130,8 +135,12 @@ describe('resolveIntervalMs', () => {
   });
   it('splits periods into ≤6 min chunks with enough subs for a full rotation', () => {
     expect(resolveIntervalMs(config(), 9)).toBe(5 * MINUTE_MS); // 4×10, 9 players, swap 2
-    expect(resolveIntervalMs(config({ periods: 2, periodMinutes: 25, onField: 9 }), 11)).toBe(5 * MINUTE_MS);
-    expect(resolveIntervalMs(config({ periods: 2, periodMinutes: 30, onField: 11, swapSize: 3 }), 14)).toBe(6 * MINUTE_MS);
+    expect(resolveIntervalMs(config({ periods: 2, periodMinutes: 25, onField: 9 }), 11)).toBe(
+      5 * MINUTE_MS,
+    );
+    expect(
+      resolveIntervalMs(config({ periods: 2, periodMinutes: 30, onField: 11, swapSize: 3 }), 14),
+    ).toBe(6 * MINUTE_MS);
     expect(resolveIntervalMs(config({ swapSize: 1 }), 10)).toBe(200_000); // 3 chunks of 3:20
   });
 });
@@ -237,9 +246,17 @@ describe('fairness over a whole game', () => {
     ['9 players, 7 on, swap 2, 4×10', config(), 9],
     ['8 players, 5 on, swap 2, 4×10', config({ onField: 5 }), 8],
     ['10 players, 7 on, swap 1, 4×10', config({ swapSize: 1 }), 10],
-    ['12 players, 9 on, swap 3, 2×25', config({ periods: 2, periodMinutes: 25, onField: 9, swapSize: 3 }), 12],
+    [
+      '12 players, 9 on, swap 3, 2×25',
+      config({ periods: 2, periodMinutes: 25, onField: 9, swapSize: 3 }),
+      12,
+    ],
     ['11 players, 9 on, swap 2, 2×25', config({ periods: 2, periodMinutes: 25, onField: 9 }), 11],
-    ['14 players, 11 on, swap 3, 2×30', config({ periods: 2, periodMinutes: 30, onField: 11, swapSize: 3 }), 14],
+    [
+      '14 players, 11 on, swap 3, 2×30',
+      config({ periods: 2, periodMinutes: 30, onField: 11, swapSize: 3 }),
+      14,
+    ],
     ['whole bench swaps: 9 players, 6 on, swap 3', config({ onField: 6, swapSize: 3 }), 9],
   ];
   for (const [label, cfg, n] of cases) {
@@ -267,7 +284,12 @@ describe('mid-game changes', () => {
   it('a late arriver is brought on first and does not overtake the others', () => {
     const cfg = config();
     const squad = players(9);
-    const { state, now } = simulate(cfg, squad, ['p9'], [{ atGameMs: 20 * MINUTE_MS, id: 'p9', to: 'bench' }]);
+    const { state, now } = simulate(
+      cfg,
+      squad,
+      ['p9'],
+      [{ atGameMs: 20 * MINUTE_MS, id: 'p9', to: 'bench' }],
+    );
     const late = totalPlayedMs(state, 'p9', now);
     const others = squad.filter((p) => p.id !== 'p9').map((p) => totalPlayedMs(state, p.id, now));
     expect(late).toBeGreaterThan(0);
@@ -277,7 +299,12 @@ describe('mid-game changes', () => {
   });
   it('an injured player leaves the queues and keeps their minutes', () => {
     const cfg = config();
-    const { state, now } = simulate(cfg, players(9), [], [{ atGameMs: 12 * MINUTE_MS, id: 'p1', to: 'out' }]);
+    const { state, now } = simulate(
+      cfg,
+      players(9),
+      [],
+      [{ atGameMs: 12 * MINUTE_MS, id: 'p1', to: 'out' }],
+    );
     expect(state.location['p1']).toBe('out');
     expect(nextOffQueue(state, now)).not.toContain('p1');
     expect(nextOnQueue(state, now)).not.toContain('p1');
@@ -285,7 +312,9 @@ describe('mid-game changes', () => {
     expect(totalPlayedMs(state, 'p1', now)).toBeLessThanOrEqual(12 * MINUTE_MS);
     const remaining = state.players.filter((p) => p.id !== 'p1');
     const played = remaining.map((p) => totalPlayedMs(state, p.id, now));
-    expect(Math.max(...played) - Math.min(...played)).toBeLessThanOrEqual(fairnessBoundMs(state) + 1);
+    expect(Math.max(...played) - Math.min(...played)).toBeLessThanOrEqual(
+      fairnessBoundMs(state) + 1,
+    );
   });
   it('undo restores the exact previous state', () => {
     const cfg = config();
@@ -299,7 +328,11 @@ describe('mid-game changes', () => {
     let s = reduce(null, created(config(), players(9)));
     s = reduce(s, { type: 'PeriodStarted', at: T0 });
     expect(s.intervalMs).toBe(5 * MINUTE_MS);
-    s = reduce(s, { type: 'ConfigChanged', at: T0 + 1000, config: config({ intervalSeconds: 180 }) });
+    s = reduce(s, {
+      type: 'ConfigChanged',
+      at: T0 + 1000,
+      config: config({ intervalSeconds: 180 }),
+    });
     expect(s.intervalMs).toBe(180_000);
     expect(subCountdownMs(s, T0 + 60_000)).toBe(120_000);
   });
@@ -315,7 +348,8 @@ describe('summary and formatting', () => {
     const { state, now } = simulate(config(), players(9));
     const rows = summary(state, now);
     expect(rows).toHaveLength(9);
-    for (let i = 1; i < rows.length; i++) expect(rows[i - 1]!.playedMs).toBeGreaterThanOrEqual(rows[i]!.playedMs);
+    for (let i = 1; i < rows.length; i++)
+      expect(rows[i - 1]!.playedMs).toBeGreaterThanOrEqual(rows[i]!.playedMs);
     expect(rows.every((r) => r.stints >= 1)).toBe(true);
   });
 });
