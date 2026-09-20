@@ -32,11 +32,13 @@
       {/if}
       <span class="name">{name}</span>
     </span>
-    <span class="time mono">{formatClock(playedMs)}</span>
+    <span class="bottom">
+      {#if badge}
+        <span class="badge">{badge === 'on' ? 'NEXT ON' : 'NEXT OFF'}</span>
+      {/if}
+      <span class="time mono">{formatClock(playedMs)}</span>
+    </span>
   </button>
-  {#if badge}
-    <span class="badge">{badge === 'on' ? 'NEXT ON' : 'NEXT OFF'}</span>
-  {/if}
   {#if expanded}
     <div class="moves">
       {#each moves as [to, label] (to)}
@@ -78,12 +80,6 @@
     align-items: center;
     gap: 6px;
     min-width: 0;
-    padding-right: 4px;
-  }
-  /* Keep the name clear of the NEXT ON / NEXT OFF badge in the corner. */
-  .card.on .top,
-  .card.off .top {
-    padding-right: 64px;
   }
   .rank {
     flex: none;
@@ -102,25 +98,31 @@
     font-size: 1.1rem;
     font-weight: 700;
     line-height: 1.2;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .bottom {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
   }
   .time {
-    align-self: flex-end;
     font-size: 0.95rem;
     color: var(--muted);
     font-weight: 600;
   }
   .badge {
-    position: absolute;
-    top: 0;
-    right: 0;
+    margin-right: auto;
     font-size: 0.6rem;
     font-weight: 800;
     letter-spacing: 0.05em;
     padding: 2px 6px;
-    border-bottom-left-radius: 8px;
+    border-radius: 6px;
     background: var(--fg);
     color: var(--bg);
+    white-space: nowrap;
   }
   .card.on .badge {
     background: var(--on);

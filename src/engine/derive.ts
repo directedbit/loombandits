@@ -79,25 +79,30 @@ export function plannedIntervalNowMs(state: GameState): number {
 }
 
 /**
- * Game-clock ms at which the next substitution is due. The subs still to come in this
- * period are spread evenly over the time left since the last anchor, so lost time is
- * shared out rather than landing on the last stint. Null before kick-off and after full time.
+ * Game-clock ms at which the next substitution is due.
+ *
+ * Behind plan (a late sub): the subs still planned for this period are spread evenly over
+ * the time left, so stints get shorter and lost time is shared out. Ahead of plan (early or
+ * extra subs): a stint is never stretched beyond the planned interval, so extra subs simply
+ * continue the cadence; the planned count is a minimum, not a cap. A last stint shorter than
+ * half an interval is folded into the break. Null before kick-off and after full time.
  */
 export function nextSubDueGameMs(state: GameState): number | null {
   if (state.phase === 'pre' || state.phase === 'finished') return null;
   const P = periodLengthMs(state);
-  const K = subsPerPeriodNow(state);
+  const interval = plannedIntervalNowMs(state);
   if (state.phase === 'break') {
     // A swap at the break is free: due until the coach makes one, then the first stint of
     // the next period.
     const swapped = state.subAnchorGameMs >= state.completedPeriodsMs;
-    return swapped ? state.completedPeriodsMs + Math.round(P / K) : state.completedPeriodsMs;
+    return swapped ? state.completedPeriodsMs + interval : state.completedPeriodsMs;
   }
   const end = state.periodStartGameMs + P;
-  const remainingInPlay = Math.max(0, K - 1 - state.inPlaySubsThisPeriod);
-  if (remainingInPlay === 0) return end;
   const anchor = state.subAnchorGameMs;
-  return Math.round(anchor + (end - anchor) / (remainingInPlay + 1));
+  const remainingPlanned = Math.max(0, subsPerPeriodNow(state) - 1 - state.inPlaySubsThisPeriod);
+  const respread = remainingPlanned > 0 ? (end - anchor) / (remainingPlanned + 1) : interval;
+  const due = Math.round(anchor + Math.min(interval, respread));
+  return end - due < interval / 2 ? end : due;
 }
 
 /** Ms until the next substitution is due; negative when overdue; null before kick-off. */

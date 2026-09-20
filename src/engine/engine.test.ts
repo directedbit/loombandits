@@ -261,20 +261,44 @@ describe('adaptive sub timing', () => {
     s = reduce(s, { type: 'SubMade', at: T0 + 460_000, ...recommendedSwap(s, T0 + 460_000) });
     expect(subCountdownMs(s, T0 + 460_000)).toBe(140_000); // due at the break, 10:00
   });
-  it('re-spreads after an early sub without adding a stint', () => {
+  it('an early sub never stretches the next stint beyond the planned interval', () => {
     let s = reduce(null, created(cfg, squad));
     s = reduce(s, { type: 'PeriodStarted', at: T0 });
     s = reduce(s, { type: 'SubMade', at: T0 + 90_000, ...recommendedSwap(s, T0 + 90_000) });
-    // Remaining 8:30 over three stints → 4:20, 7:10, break.
-    expect(subCountdownMs(s, T0 + 90_000)).toBe(170_000);
+    // Spreading 8:30 over three stints would be 2:50; the plan keeps 2:30 → 4:00.
+    expect(subCountdownMs(s, T0 + 90_000)).toBe(150_000);
+    s = reduce(s, { type: 'SubMade', at: T0 + 240_000, ...recommendedSwap(s, T0 + 240_000) });
+    expect(subCountdownMs(s, T0 + 240_000)).toBe(150_000); // 6:30
+    s = reduce(s, { type: 'SubMade', at: T0 + 390_000, ...recommendedSwap(s, T0 + 390_000) });
+    // 9:00 would leave a 1:00 stint, under half an interval: fold it into the break.
+    expect(subCountdownMs(s, T0 + 390_000)).toBe(210_000);
   });
-  it('once the planned in-play subs are used, the next is due at the break', () => {
+  it('extra subs keep the planned cadence instead of waiting for the break', () => {
     let s = reduce(null, created(cfg, squad));
     s = reduce(s, { type: 'PeriodStarted', at: T0 });
     for (const t of [60_000, 120_000, 180_000]) {
       s = reduce(s, { type: 'SubMade', at: T0 + t, ...recommendedSwap(s, T0 + t) });
     }
-    expect(subCountdownMs(s, T0 + 180_000)).toBe(420_000);
+    // All three planned in-play subs are used by 3:00; the next is still one interval away.
+    expect(subCountdownMs(s, T0 + 180_000)).toBe(150_000);
+  });
+  it('seven quick "sub early" taps do not push the next sub to the break (the 13:49 bug)', () => {
+    const half = config({
+      rotationScope: 'period',
+      periods: 2,
+      periodMinutes: 15,
+      onField: 5,
+      swapSize: 1,
+    });
+    let s = reduce(null, created(half, players(8)));
+    s = reduce(s, { type: 'PeriodStarted', at: T0 });
+    for (let i = 1; i <= 7; i++) {
+      const at = T0 + i * 10_000;
+      s = reduce(s, { type: 'SubMade', at, ...recommendedSwap(s, at) });
+    }
+    // Last sub at 1:10; the next is due one planned interval (1:52.5) later, at 3:02.5.
+    expect(subCountdownMs(s, T0 + 71_000)).toBe(111_500);
+    expect(subCountdownMs(s, T0 + 71_000)).toBeLessThan(13 * MINUTE_MS);
   });
   it('a pause moves nothing: the plan lives in game time', () => {
     let s = reduce(null, created(cfg, squad));
