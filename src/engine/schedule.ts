@@ -27,8 +27,10 @@ export function effectiveSwapSize(config: GameConfig, available: number): number
  * `subsPerPeriod - 1` in-play substitutions.
  *
  * - Fixed interval: as many slots as fit the period.
- * - Period scope: every starter comes off during the period (and so every bench player
- *   comes on), plus the swap at the break.
+ * - Period scope: one full rotation per period, so every player comes off exactly once
+ *   (the last group at the break). With `S_eff` players moved per sub that is
+ *   `ceil(N / S_eff)` slots. Every starter is off during the period and every bench
+ *   player gets on; when S_eff divides both N and the bench, everyone's time is identical.
  * - Game scope: chunks of at most six minutes, with enough subs over the game for every
  *   player to have come off once.
  */
@@ -42,7 +44,7 @@ export function subsPerPeriod(config: GameConfig, available: number): number {
   }
   const swap = effectiveSwapSize(config, available);
   if (config.rotationScope === 'period') {
-    return Math.ceil(onField / swap) + 1;
+    return Math.ceil(available / swap);
   }
   const rotations = Math.ceil(available / swap);
   return Math.max(

@@ -3,7 +3,7 @@
     FREQUENT_SUB_WARNING_MS,
     formatClock,
     plannedIntervalMs,
-    subsPerPeriod,
+    projectPeriod,
     type RotationScope,
   } from '../engine';
   import { game } from '../store/game.svelte';
@@ -23,8 +23,8 @@
 
   const available = $derived(s.players.length);
   const autoIntervalMs = $derived(plannedIntervalMs({ ...s, intervalSeconds: null }, available));
-  const slots = $derived(subsPerPeriod(s, available));
-  const intervalMs = $derived(plannedIntervalMs(s, available));
+  const plan = $derived(projectPeriod(s, available));
+  const even = $derived(plan.maxMs - plan.minMs <= 1000);
   const bench = $derived(Math.max(0, available - s.onField));
   const inGame = $derived(game.state !== null && game.state.phase !== 'finished');
 
@@ -156,11 +156,19 @@
       {#if bench === 0}
         Nobody on the bench with {available} players and {s.onField} on the field, so no substitutions.
       {:else}
-        <strong>{slots - 1} {slots === 2 ? 'sub' : 'subs'} a period</strong> plus the swap at the
-        break, about every <strong>{formatClock(intervalMs)}</strong>.
-        {#if intervalMs < FREQUENT_SUB_WARNING_MS}
+        <strong>{plan.inPlaySubs} {plan.inPlaySubs === 1 ? 'sub' : 'subs'} a period</strong>
+        plus the swap at the break, about every <strong>{formatClock(plan.intervalMs)}</strong>.
+        {#if even}
+          Everyone plays <strong>{formatClock(plan.minMs)}</strong> each period.
+        {:else}
+          Each player gets between <strong>{formatClock(plan.minMs)}</strong> and
+          <strong>{formatClock(plan.maxMs)}</strong> a period (even share
+          {formatClock(plan.targetMs)}).
+        {/if}
+        {#if plan.intervalMs < FREQUENT_SUB_WARNING_MS}
           <span class="warn">
-            That is very frequent. A bigger swap size or fewer on the field would calm it down.
+            That is very frequent. A bigger swap size means fewer subs but a bigger gap between
+            players.
           </span>
         {/if}
       {/if}

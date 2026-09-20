@@ -13,6 +13,7 @@ import {
   periodPlayedMs,
   plannedIntervalMs,
   plannedIntervalNowMs,
+  projectPeriod,
   recommendedSwap,
   reduce,
   replay,
@@ -157,9 +158,9 @@ describe('subsPerPeriod and plannedIntervalMs', () => {
     ).toBe(6 * MINUTE_MS);
     expect(plannedIntervalMs(config({ swapSize: 1 }), 10)).toBe(200_000);
   });
-  it('period scope: every starter off during the period, plus the break swap', () => {
+  it('period scope: one full rotation per period', () => {
     const period = config({ rotationScope: 'period' });
-    expect(subsPerPeriod(period, 9)).toBe(5); // 7 on, bench 2, swap 2 → 4 in play + break
+    expect(subsPerPeriod(period, 9)).toBe(5); // 9 players, swap 2 → 5 slots, 4 in play
     expect(plannedIntervalMs(period, 9)).toBe(2 * MINUTE_MS);
     expect(subsPerPeriod(period, 8)).toBe(8); // bench 1 → effective swap 1
     expect(effectiveSwapSize(period, 8)).toBe(1);
@@ -422,7 +423,7 @@ describe('fairness in every period (period scope)', () => {
     ],
   ];
   for (const [label, cfg, n] of cases) {
-    it(`${label}: everyone on and off in every period, per-period spread ≤ one bench stint`, () => {
+    it(`${label}: everyone on and off in every period, per-period spread ≤ one interval`, () => {
       const { state, now, periods } = simulate(cfg, players(n));
       const P = cfg.periodMinutes * MINUTE_MS;
       expect(periods).toHaveLength(cfg.periods);
@@ -432,12 +433,70 @@ describe('fairness in every period (period scope)', () => {
           expect(v).toBeGreaterThan(0);
           expect(v).toBeLessThan(P);
         }
-        expect(spread(values)).toBeLessThanOrEqual(fairnessBoundMs(state) + 1);
+        expect(spread(values)).toBeLessThanOrEqual(plannedIntervalNowMs(state) + 1);
       }
       const total = playedByAvailable(state, now).reduce((a, b) => a + b, 0);
       expect(total).toBe(cfg.onField * cfg.periods * P);
     });
   }
+});
+
+describe('the Loom Bandits default plan: 8 players, 5 on, 1 per sub, 2 × 15 min', () => {
+  const squad = players(8);
+  const cfg = config({
+    rotationScope: 'period',
+    periods: 2,
+    periodMinutes: 15,
+    onField: 5,
+    swapSize: 1,
+  });
+  const P = 15 * MINUTE_MS;
+  const fairShare = (5 * P) / 8; // 9:22.5
+
+  it('plans a full rotation each half: 7 subs in play plus the break, about every 1:52', () => {
+    expect(subsPerPeriod(cfg, 8)).toBe(8);
+    expect(plannedIntervalMs(cfg, 8)).toBe(112_500);
+  });
+  it('gets all eight players on the field in every half', () => {
+    const { periods } = simulate(cfg, squad);
+    for (const minutes of periods) {
+      expect(Object.keys(minutes)).toHaveLength(8);
+      for (const v of Object.values(minutes)) expect(v).toBeGreaterThan(0);
+    }
+  });
+  it('gives every player the same time in each half: 9:22 each', () => {
+    const projection = projectPeriod(cfg, 8);
+    expect(projection.minutesMs).toHaveLength(8);
+    expect(projection.maxMs - projection.minMs).toBeLessThanOrEqual(1);
+    expect(Math.abs(projection.minMs - fairShare)).toBeLessThanOrEqual(1);
+    expect(projection.minutesMs.reduce((a, b) => a + b, 0)).toBe(5 * P);
+  });
+  it('over the whole game everyone ends within a second of each other', () => {
+    const { state, now, periods } = simulate(cfg, squad);
+    expect(spread(playedByAvailable(state, now))).toBeLessThanOrEqual(1000);
+    for (const minutes of periods) expect(spread(Object.values(minutes))).toBeLessThanOrEqual(1);
+  });
+  it('bigger swaps mean fewer subs but a bigger gap between players', () => {
+    const two = projectPeriod({ ...cfg, swapSize: 2 }, 8);
+    expect(two.slots).toBe(4); // 3 in play, every 3:45
+    expect(two.intervalMs).toBe(225_000);
+    expect(two.maxMs - two.minMs).toBe(225_000);
+    expect(two.minMs).toBe(450_000); // 7:30
+    expect(two.maxMs).toBe(675_000); // 11:15
+
+    const three = projectPeriod({ ...cfg, swapSize: 3 }, 8);
+    expect(three.slots).toBe(3); // 2 in play, every 5:00
+    expect(three.intervalMs).toBe(300_000);
+    expect(three.maxMs - three.minMs).toBe(300_000);
+    expect(three.minMs).toBe(300_000); // 5:00
+    expect(three.maxMs).toBe(600_000); // 10:00
+  });
+  it('the projection agrees with a full simulation of the first half', () => {
+    const projection = projectPeriod(cfg, 8);
+    const { periods } = simulate(cfg, squad);
+    const simulated = Object.values(periods[0]!).sort((a, b) => b - a);
+    expect(simulated).toEqual(projection.minutesMs);
+  });
 });
 
 describe('mid-game changes', () => {

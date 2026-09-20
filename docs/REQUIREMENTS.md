@@ -121,12 +121,23 @@ looks at the current totals, never at a pre-baked schedule.
   minutes with enough subs over the game for everyone to have come off once.
 - _Period_ ("everyone on and off each half"): fairness is judged on minutes in the current
   period, whole-game minutes as tie-break. With `S_eff = min(S, B, F)` players actually
-  moved per sub, subs per period `K = ceil(F / S_eff) + 1`: the `K − 1` in-play subs take
-  every starter off during the period (and so bring every bench player on), and the `K`-th
-  is the swap at the break. With 7 on the field and 2 per sub that is 4 in-play subs a
-  period: every 2:00 in a 10-minute quarter, every 4:00 in a 20-minute half. With only one
-  on the bench it is 7 in-play subs a period. Settings shows this number so the coach can
-  trade swap size against sub frequency, and warns under two minutes.
+  moved per sub, the plan is **one full rotation per period**: `K = ceil(N / S_eff)` slots,
+  so every player comes off exactly once (the last group at the break). Every starter is off
+  during the period and every bench player gets on. When `S_eff` divides both `N` and `B`
+  everyone's time is identical; otherwise the spread is one interval. "Everyone on and off
+  once" alone (`ceil(F / S_eff) + 1` slots) is not enough: with 8 players, 5 on and one per
+  sub it leaves a 5:00 gap in a 15-minute half.
+
+  The trade-off for the Loom Bandits (8 players, 5 on, 15-minute halves):
+
+  | Swap size | Subs a half | Every | Each player gets |
+  | --------- | ----------- | ----- | ---------------- |
+  | 1         | 7           | 1:52  | 9:22 exactly     |
+  | 2         | 3           | 3:45  | 7:30 – 11:15     |
+  | 3         | 2           | 5:00  | 5:00 – 10:00     |
+
+  Settings shows this projection for the current squad so the coach can choose.
+
 - _Fixed interval_ (either scope): `K = round(P / interval)`, so the interval is rounded to
   fit whole stints into the period.
 
@@ -167,7 +178,8 @@ tighten the final spread further.
 5. After a sub made δ late, the remaining subs in the period are re-spread: each remaining
    stint is shorter by δ / (remaining stints), and the final spread stays within the bound.
 6. In period scope, every available player has field time and bench time in every period
-   (given bench ≥ 1), and per-period spread ≤ one bench stint.
+   (given bench ≥ 1), and per-period spread ≤ one interval; zero when the swap size divides
+   both the squad and the bench.
 
 ## 6. Non-functional requirements
 

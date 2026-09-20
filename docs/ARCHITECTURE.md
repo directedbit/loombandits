@@ -129,5 +129,7 @@ Implemented in the engine, all pure and unit-tested:
 - `schedule.ts`: `effectiveSwapSize`, `subsPerPeriod` per scope, `plannedIntervalMs`.
 - `derive.ts`: `nextSubDueGameMs` = anchor + (period end − anchor) / (remaining in-play subs + 1);
   queues sort by `[scope minutes, game minutes, stint]`; `fairnessBoundMs`.
-- Settings UI: rotation select plus a "subs a period / about every m:ss" readout with a warning
-  under two minutes. Settings storage moved to `lb.settings.v2` with a one-off migration.
+- `project.ts`: `projectPeriod(config, n)` plays one period on paper with the engine's own
+  recommendations and returns slots, interval and each player's minutes.
+- Settings UI: rotation select plus a readout of subs a period, interval and the projected
+  minutes range, with a warning under two minutes. Settings storage moved to `lb.settings.v2` with a one-off migration.
