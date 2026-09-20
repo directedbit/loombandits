@@ -96,11 +96,11 @@ export function recommendedSwap(state: GameState, now: number): Swap {
   const onQ = nextOnQueue(state, now);
   const deficit = state.config.onField - offQ.length; // >0 short-handed, <0 too many
   const rotate = Math.min(state.config.swapSize, onQ.length, offQ.length);
-  let offCount = rotate;
-  let onCount = rotate;
-  if (deficit > 0) onCount = Math.min(onQ.length, rotate + deficit);
-  if (deficit < 0) offCount = Math.min(offQ.length, rotate - deficit);
-  // Never bring on more than the bench can supply or take off more than are on.
+  let onCount = Math.min(onQ.length, rotate + Math.max(0, deficit));
+  let offCount = Math.min(offQ.length, rotate + Math.max(0, -deficit));
+  // Leave the field as close to full as the bench allows after the swap.
+  if (deficit > 0) offCount = Math.max(0, Math.min(offCount, onCount - deficit));
+  if (deficit < 0) onCount = Math.max(0, Math.min(onCount, offCount + deficit));
   return { off: offQ.slice(0, offCount), on: onQ.slice(0, onCount) };
 }
 

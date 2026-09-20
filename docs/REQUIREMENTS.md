@@ -66,7 +66,7 @@ Priority: **M** must have for v1, **S** should have, **C** could have.
 | ID   | Pri | Requirement |
 |------|-----|-------------|
 | F4.1 | M | For each available player track: total time on field this game, and length of the current stint (on field or on bench). |
-| F4.2 | M | **Fairness target:** at the final whistle every available player has played `players_on_field × total_game_time / available_players`, within one substitution interval. |
+| F4.2 | M | **Fairness target:** at the final whistle every available player has played `players_on_field × total_game_time / available_players`, within one bench stint (`ceil(bench ÷ swap_size)` intervals). When the whole bench swaps each time this is one interval. |
 | F4.3 | M | **Next-off queue:** on-field players ordered by most total time played (tie: longest current stint). **Next-on queue:** sideline players ordered by least total time played (tie: longest on bench). The top *S* of each queue are the recommended swap. |
 | F4.4 | M | The next-sub countdown runs from the last sub (or period start). At zero the header shows **SUB NOW**, the phone vibrates where supported, and the overdue time keeps counting so the coach can see how late they are. |
 | F4.5 | M | **Do sub**: one tap executes the recommended swap. The coach can pick different players before confirming. Early or late subs simply re-time the next one. |
@@ -128,11 +128,12 @@ Examples:
 | 9  | 7 | 2 | 40 min | 4 min (m = 2) | ~9 min total |
 
 Because *who* is recomputed from totals every time, the interval only needs to be
-"about right"; the fairness bound in F4.2 still holds.
+"about right"; the fairness bound in F4.2 still holds. Tightening the end-of-game spread
+further (an adaptive final sub time) is a should-have, tracked as F4.8.
 
 **Invariants to test.**
 
-1. With no overrides, max−min playing time at the final whistle ≤ one interval.
+1. With no overrides, max−min playing time at the final whistle ≤ one bench stint (`ceil(B / S)` intervals); ≤ one interval when S ≥ B.
 2. A late arriver is prioritised on until they catch up, never beyond.
 3. Marking a player not-playing mid-game removes them from queues and does not
    distort others' targets retroactively.
