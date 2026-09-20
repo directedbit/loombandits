@@ -12,5 +12,19 @@
     "check": "scripts/check.sh",
     "preview": "scripts/preview.sh"
   },
-  "engines": { "node": ">=20.19" }
+  "engines": {
+    "node": ">=20.19"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^6.2.4",
+    "prettier": "^3.9.8",
+    "prettier-plugin-svelte": "^3.5.2",
+    "sharp": "^0.34.5",
+    "svelte": "^5.57.1",
+    "svelte-check": "^4.7.6",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6",
+    "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^3.2.7"
+  }
 }
