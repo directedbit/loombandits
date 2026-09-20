@@ -13,7 +13,7 @@
     "allowJs": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["vite/client", "vite-plugin-pwa/svelte"]
+    "types": ["node", "vite/client", "vite-plugin-pwa/svelte"]
   },
   "include": ["src/**/*.ts", "src/**/*.svelte", "vite.config.ts"]
 }
