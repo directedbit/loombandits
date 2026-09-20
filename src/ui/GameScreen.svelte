@@ -102,7 +102,7 @@
   });
 </script>
 
-<div class="screen">
+<div class="screen" class:fixed={gameState !== null}>
   {#if !gameState}
     {@const s = settings.value}
     <div class="start">
@@ -119,13 +119,15 @@
   {:else}
     <Header {gameState} {now} />
 
-    {#if gameState.phase === 'pre'}
-      <p class="hint muted">
-        Tap a player to move them. Mark anyone absent as not playing, then start.
-      </p>
-    {/if}
+    <div class="scroll">
+      {#if gameState.phase === 'pre'}
+        <p class="hint muted">
+          Tap a player to move them. Mark anyone absent as not playing, then start.
+        </p>
+      {/if}
 
-    <Board {gameState} {now} {swap} onMove={move} />
+      <Board {gameState} {now} {swap} onMove={move} />
+    </div>
 
     <div class="controls">
       {#if gameState.phase !== 'pre' && gameState.phase !== 'finished'}
@@ -198,14 +200,10 @@
     font-size: 0.95rem;
   }
   .controls {
-    position: sticky;
-    bottom: 0;
-    margin-top: auto;
+    flex: none;
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 10px 0 calc(8px + env(safe-area-inset-bottom));
-    background: var(--bg);
   }
   .subline {
     display: flex;

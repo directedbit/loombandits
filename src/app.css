@@ -47,10 +47,10 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 #app {
-  min-height: 100dvh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
-  padding-bottom: env(safe-area-inset-bottom);
+  overflow: hidden;
 }
 button {
   font: inherit;
@@ -100,21 +100,33 @@ h2 {
 }
 .screen {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 12px;
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
   max-width: 900px;
   width: 100%;
   margin: 0 auto;
 }
+/* A screen whose header and controls stay put while the middle scrolls. */
+.screen.fixed {
+  overflow: hidden;
+}
+.screen.fixed > .scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 .topnav {
   display: flex;
+  flex: none;
   border-bottom: 2px solid var(--line);
   background: var(--bg);
-  position: sticky;
-  top: 0;
-  z-index: 5;
 }
 .topnav a {
   flex: 1;
