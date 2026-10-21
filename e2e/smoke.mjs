@@ -78,6 +78,26 @@ await expect(page.getByText('Not playing 1'), 'one not playing');
 await page.getByRole('button', { name: 'Undo' }).click();
 await expect(page.getByText('Not playing 0'), 'undo restored her');
 
+// Set the order: the second card in each column moves to the top, so she is first off / on.
+const columnNames = async (column) => page.locator(`.${column} .card .name`).allTextContents();
+const fieldBefore = await columnNames('field');
+await page.locator('.field .card').nth(1).getByRole('button').first().click();
+await page.getByRole('button', { name: '▲ Earlier' }).click();
+const fieldAfter = await columnNames('field');
+if (fieldAfter[0] !== fieldBefore[1] || fieldAfter[1] !== fieldBefore[0]) {
+  await shot('FAILED');
+  throw new Error(`expected ${fieldBefore[1]} first off, got ${fieldAfter.join(', ')}`);
+}
+const benchBefore = await columnNames('bench');
+await page.locator('.bench .card').nth(1).getByRole('button').first().click();
+await page.getByRole('button', { name: '▲ Earlier' }).click();
+const benchAfter = await columnNames('bench');
+if (benchAfter[0] !== benchBefore[1]) {
+  await shot('FAILED');
+  throw new Error(`expected ${benchBefore[1]} first on, got ${benchAfter.join(', ')}`);
+}
+await shot('ordered');
+
 // Kick off, let the clock run, sub early.
 await page.getByRole('button', { name: 'Start period 1' }).click();
 await expect(page.getByText(/Period 1 of \d/), 'running header');
@@ -85,9 +105,95 @@ await page.waitForTimeout(1500);
 await expect(page.getByText('NEXT ON'), 'next-on badge');
 await expect(page.getByText('NEXT OFF'), 'next-off badge');
 await shot('running');
+// The first swap follows the order set before kick-off.
+const firstOff = page.locator('.field .card.off .name');
+if ((await firstOff.first().textContent()) !== fieldAfter[0]) {
+  await shot('FAILED');
+  throw new Error(`expected ${fieldAfter[0]} to be next off`);
+}
 await page.getByRole('button', { name: /Sub (early|now)/ }).click();
 await page.waitForTimeout(600);
 await shot('after-sub');
+
+// Sub two players who are not next up: "Sub ... next" moves each to the front of her column,
+// the badge and the sub line follow, and the change is to the order itself.
+const lastField = page.locator('.field .card').last();
+const promotedOff = await lastField.locator('.name').textContent();
+await lastField.getByRole('button').first().click();
+await page.getByRole('button', { name: 'Sub off next' }).click();
+const lastBench = page.locator('.bench .card').last();
+const promotedOn = await lastBench.locator('.name').textContent();
+await lastBench.getByRole('button').first().click();
+await page.getByRole('button', { name: 'Sub on next' }).click();
+const fieldOrder = await columnNames('field');
+const benchOrder = await columnNames('bench');
+if (fieldOrder[0] !== promotedOff || benchOrder[0] !== promotedOn) {
+  await shot('FAILED');
+  throw new Error(
+    `expected ${promotedOff} / ${promotedOn} at the front, got ${fieldOrder[0]} / ${benchOrder[0]}`,
+  );
+}
+if ((await page.locator('.field .card.off .name').first().textContent()) !== promotedOff) {
+  await shot('FAILED');
+  throw new Error(`expected the NEXT OFF badge on ${promotedOff}`);
+}
+await shot('promoted');
+await page.getByRole('button', { name: /Sub (early|now)/ }).click();
+await page.waitForTimeout(300);
+// Two per sub: the two at the front of each column swapped and joined the back of the other
+// column in that order; nobody else moved.
+const expectField = [...fieldOrder.slice(2), ...benchOrder.slice(0, 2)];
+const expectBench = [...benchOrder.slice(2), ...fieldOrder.slice(0, 2)];
+const fieldNow = await columnNames('field');
+const benchNow = await columnNames('bench');
+if (fieldNow.join() !== expectField.join() || benchNow.join() !== expectBench.join()) {
+  await shot('FAILED');
+  throw new Error(
+    `order after the sub: field ${fieldNow.join(', ')} (expected ${expectField.join(', ')}); ` +
+      `bench ${benchNow.join(', ')} (expected ${expectBench.join(', ')})`,
+  );
+}
+
+// The order can still be changed in play: move the second field card up one place.
+await page.locator('.field .card').nth(1).getByRole('button').first().click();
+await page.getByRole('button', { name: '▲ Earlier' }).click();
+const reordered = await columnNames('field');
+if (reordered[0] !== fieldNow[1] || reordered[1] !== fieldNow[0]) {
+  await shot('FAILED');
+  throw new Error(`expected ${fieldNow[1]} first off after Earlier, got ${reordered.join(', ')}`);
+}
+await page.locator('.field .card').first().getByRole('button').first().click(); // collapse
+
+// The half is cut short: −30s shortens the period, keeps the minutes and re-plans the subs.
+const clock = page.locator('.hdr .big').first();
+const nextSub = page.locator('.hdr .big').nth(1);
+const toSeconds = (t) => {
+  const [m, sec] = t.trim().split(':').map(Number);
+  return m * 60 + sec;
+};
+const beforeRemaining = toSeconds(await clock.textContent());
+const beforeNext = toSeconds(await nextSub.textContent());
+await page.getByRole('button', { name: 'Take 30 seconds off the period' }).click();
+await page.waitForTimeout(300);
+const afterRemaining = toSeconds(await clock.textContent());
+const afterNext = toSeconds(await nextSub.textContent());
+if (afterRemaining > beforeRemaining - 25) {
+  await shot('FAILED');
+  throw new Error(`expected −30s to shorten the half: ${beforeRemaining} → ${afterRemaining}`);
+}
+// 9 players, 7 on, 2 per sub: 5 slots a period, so the interval drops from 3:00 to 2:54.
+if (afterNext >= beforeNext) {
+  await shot('FAILED');
+  throw new Error(`expected the next sub to move closer: ${beforeNext} → ${afterNext}`);
+}
+await expect(page.getByText('14:30'), 'period length shown');
+await shot('period-shortened');
+await page.getByRole('button', { name: 'Add 30 seconds to the period' }).click();
+await page.waitForTimeout(300);
+if (toSeconds(await clock.textContent()) < afterRemaining + 25) {
+  await shot('FAILED');
+  throw new Error('expected +30s to put the time back');
+}
 
 // State survives a reload.
 await page.reload();

@@ -47,7 +47,7 @@ export function projectPeriod(config: GameConfig, available: number): PeriodProj
   for (let guard = 0; guard < 500; guard++) {
     const due = nextSubDueGameMs(state);
     if (due === null || due >= P - 1) break;
-    state = reduce(state, { type: 'SubMade', at: due, ...recommendedSwap(state, due) });
+    state = reduce(state, { type: 'SubMade', at: due, ...recommendedSwap(state) });
   }
   state = reduce(state, { type: 'PeriodEnded', at: P });
   const minutesMs = players.map((p) => periodPlayedMs(state, p.id, P)).sort((a, b) => b - a);

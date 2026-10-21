@@ -1,6 +1,10 @@
 <script lang="ts">
   import {
+    formatClock,
+    periodLengthMs,
+    promotedLineup,
     recommendedSwap,
+    reorderedLineup,
     subCountdownMs,
     type GameEvent,
     type Location,
@@ -14,7 +18,7 @@
   let { now }: { now: number } = $props();
 
   const gameState = $derived(game.state);
-  const swap = $derived(gameState ? recommendedSwap(gameState, now) : { off: [], on: [] });
+  const swap = $derived(gameState ? recommendedSwap(gameState) : { off: [], on: [] });
   const countdown = $derived(gameState ? subCountdownMs(gameState, now) : null);
   const due = $derived(countdown !== null && countdown <= 0);
   const names = $derived(new Map(gameState?.players.map((p) => [p.id, p.name]) ?? []));
@@ -24,6 +28,20 @@
   const at = () => Date.now();
   function dispatch(event: GameEvent) {
     game.dispatch(event);
+  }
+  function undo() {
+    game.undo();
+  }
+  // The order on the board is the order: these change it for good (until changed again).
+  function reorder(id: PlayerId, direction: -1 | 1) {
+    if (!gameState) return;
+    const order = reorderedLineup(gameState, id, direction);
+    if (order) dispatch({ type: 'LineupOrdered', at: at(), order });
+  }
+  function promote(id: PlayerId) {
+    if (!gameState) return;
+    const order = promotedLineup(gameState, id);
+    if (order) dispatch({ type: 'LineupOrdered', at: at(), order });
   }
 
   function newGame() {
@@ -61,8 +79,12 @@
     if (!gameState) return;
     if (confirm(`End period ${gameState.period}?`)) dispatch({ type: 'PeriodEnded', at: at() });
   }
-  function adjust(deltaMs: number) {
-    dispatch({ type: 'ClockAdjusted', at: at(), deltaMs });
+  /**
+   * The half is being cut short (or extended): change its length. Minutes already played
+   * stay as they are; the subs still to come are re-spread over the new time left.
+   */
+  function adjustPeriod(deltaMs: number) {
+    dispatch({ type: 'PeriodAdjusted', at: at(), deltaMs });
   }
   function discard() {
     if (confirm('Discard this game? Playing times will be lost.')) game.discard();
@@ -123,11 +145,13 @@
     <div class="scroll">
       {#if gameState.phase === 'pre'}
         <p class="hint muted">
-          Tap a player to move them. Mark anyone absent as not playing, then start.
+          Tap a player to move her, or set her place in the order: 1 comes off (or goes on) first.
+          The order carries on through the game and you can change it at any time. Mark anyone
+          absent as not playing, then start.
         </p>
       {/if}
 
-      <Board {gameState} {now} {swap} onMove={move} />
+      <Board {gameState} {now} {swap} onMove={move} onReorder={reorder} onPromote={promote} />
     </div>
 
     <div class="controls">
@@ -153,15 +177,11 @@
           <button class="danger" onclick={discard}>Discard</button>
         {:else if gameState.phase === 'running'}
           <button onclick={() => dispatch({ type: 'Paused', at: at() })}>Pause</button>
-          <button onclick={() => adjust(-30_000)}>−30s</button>
-          <button onclick={() => adjust(30_000)}>+30s</button>
           <button class="danger" onclick={endPeriod}>End period</button>
         {:else if gameState.phase === 'paused'}
           <button class="primary" onclick={() => dispatch({ type: 'Resumed', at: at() })}>
             Resume
           </button>
-          <button onclick={() => adjust(-30_000)}>−30s</button>
-          <button onclick={() => adjust(30_000)}>+30s</button>
           <button class="danger" onclick={endPeriod}>End period</button>
         {:else if gameState.phase === 'break'}
           <button class="primary big" onclick={startPeriod}
@@ -171,8 +191,23 @@
           <button class="primary big" onclick={() => (location.hash = '#/summary')}>Summary</button>
           <button onclick={discard}>New game</button>
         {/if}
-        <button class="ghost" onclick={() => game.undo()} disabled={!game.canUndo}>Undo</button>
+        <button class="ghost" onclick={undo} disabled={!game.canUndo}>Undo</button>
       </div>
+
+      {#if gameState.phase !== 'finished'}
+        <div class="buttons clock">
+          <span class="muted small">
+            {gameState.phase === 'break' ? 'Next period' : 'Period'}
+            <span class="mono">{formatClock(periodLengthMs(gameState))}</span>
+          </span>
+          <button onclick={() => adjustPeriod(-30_000)} aria-label="Take 30 seconds off the period">
+            −30s
+          </button>
+          <button onclick={() => adjustPeriod(30_000)} aria-label="Add 30 seconds to the period">
+            +30s
+          </button>
+        </div>
+      {/if}
     </div>
   {/if}
 </div>
@@ -239,5 +274,14 @@
   }
   .buttons > button {
     flex: 1 1 auto;
+  }
+  .clock {
+    align-items: center;
+  }
+  .clock .small {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
   }
 </style>

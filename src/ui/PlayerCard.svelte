@@ -1,12 +1,21 @@
 <script lang="ts">
   import { formatClock, type Location } from '../engine';
 
+  /** An extra action shown above the move buttons when the card is expanded. */
+  export interface CardAction {
+    label: string;
+    onClick: () => void;
+    disabled?: boolean;
+  }
+
   interface Props {
     name: string;
     playedMs: number;
     badge?: 'on' | 'off' | null;
     rank?: number | null;
     expanded?: boolean;
+    /** Rows of actions, each row rendered as one line of buttons above the moves. */
+    actions?: CardAction[][];
     moves: Array<[Location, string]>;
     onToggle: () => void;
     onMove: (to: Location) => void;
@@ -18,6 +27,7 @@
     badge = null,
     rank = null,
     expanded = false,
+    actions = [],
     moves,
     onToggle,
     onMove,
@@ -40,6 +50,13 @@
     </span>
   </button>
   {#if expanded}
+    {#each actions as row, r (r)}
+      <div class="moves">
+        {#each row as a (a.label)}
+          <button disabled={a.disabled} onclick={a.onClick}>{a.label}</button>
+        {/each}
+      </div>
+    {/each}
     <div class="moves">
       {#each moves as [to, label] (to)}
         <button onclick={() => onMove(to)}>{label}</button>
@@ -137,10 +154,14 @@
     gap: 8px;
     padding: 0 8px 8px;
   }
+  .moves + .moves {
+    padding-top: 0;
+  }
   .moves button {
     flex: 1;
+    min-width: 0;
     min-height: 44px;
-    font-size: 0.95rem;
-    padding: 0 8px;
+    font-size: 0.85rem;
+    padding: 0 4px;
   }
 </style>

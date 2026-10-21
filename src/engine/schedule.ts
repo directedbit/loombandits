@@ -26,6 +26,8 @@ export function effectiveSwapSize(config: GameConfig, available: number): number
  * Substitution slots per period. The last slot is the free swap at the break, so there are
  * `subsPerPeriod - 1` in-play substitutions.
  *
+ * `P` is the period length in ms, the configured one unless the coach has adjusted it.
+ *
  * - Fixed interval: as many slots as fit the period.
  * - Period scope: one full rotation per period, so every player comes off exactly once
  *   (the last group at the break). With `S_eff` players moved per sub that is
@@ -34,8 +36,11 @@ export function effectiveSwapSize(config: GameConfig, available: number): number
  * - Game scope: chunks of at most six minutes, with enough subs over the game for every
  *   player to have come off once.
  */
-export function subsPerPeriod(config: GameConfig, available: number): number {
-  const P = periodMs(config);
+export function subsPerPeriod(
+  config: GameConfig,
+  available: number,
+  P: number = periodMs(config),
+): number {
   const onField = Math.min(config.onField, available);
   const bench = available - onField;
   if (bench <= 0 || onField <= 0) return 1;
@@ -54,9 +59,13 @@ export function subsPerPeriod(config: GameConfig, available: number): number {
   );
 }
 
-/** Time between subs when nothing goes wrong. */
-export function plannedIntervalMs(config: GameConfig, available: number): number {
-  return Math.round(periodMs(config) / subsPerPeriod(config, available));
+/** Time between subs when nothing goes wrong. `P` is the period length, if not the configured one. */
+export function plannedIntervalMs(
+  config: GameConfig,
+  available: number,
+  P: number = periodMs(config),
+): number {
+  return Math.round(P / subsPerPeriod(config, available, P));
 }
 
 /** Older name for plannedIntervalMs. */

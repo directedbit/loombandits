@@ -44,9 +44,20 @@ export type GameEvent =
   | { type: 'Paused'; at: number }
   | { type: 'Resumed'; at: number }
   | { type: 'PeriodEnded'; at: number }
+  /** Those coming off join the back of the sideline order; those going on, the back of the field. */
   | { type: 'SubMade'; at: number; off: PlayerId[]; on: PlayerId[] }
+  /** A manual move: same order rule as a sub; from not-playing to the sideline joins its front. */
   | { type: 'PlayerMoved'; at: number; id: PlayerId; to: Location }
-  | { type: 'ClockAdjusted'; at: number; deltaMs: number }
+  /**
+   * This period is `deltaMs` longer (negative: shorter, e.g. a late kick-off cut the half to
+   * 14 minutes). Minutes played are untouched; the remaining subs are re-spread.
+   */
+  | { type: 'PeriodAdjusted'; at: number; deltaMs: number }
+  /**
+   * The rotation order, set by the coach: reading down each column of the board, who comes
+   * off (and goes on) in what order. Allowed at any time; it sticks until changed again.
+   */
+  | { type: 'LineupOrdered'; at: number; order: PlayerId[] }
   | { type: 'ConfigChanged'; at: number; config: GameConfig };
 
 export interface PlayerClock {
@@ -62,6 +73,11 @@ export interface PlayerClock {
 
 export interface GameState {
   config: GameConfig;
+  /**
+   * The squad in rotation order. The on-field players, in this order, are the next-off queue;
+   * the sideline players, in this order, the next-on queue. Minutes never reorder anyone:
+   * only substitutions, manual moves and the coach (`LineupOrdered`) do.
+   */
   players: Player[];
   location: Record<PlayerId, Location>;
   clocks: Record<PlayerId, PlayerClock>;
@@ -80,4 +96,6 @@ export interface GameState {
   subAnchorGameMs: number;
   /** Substitutions made while the clock was live in this period. */
   inPlaySubsThisPeriod: number;
+  /** Ms added to (negative: taken off) the configured length of the current or next period. */
+  periodAdjustMs: number;
 }

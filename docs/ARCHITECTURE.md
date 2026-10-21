@@ -1,6 +1,6 @@
 # Loom Bandits Sub Tracker — Architecture
 
-Status: **implemented as described** (2026-09-20). Deviations are noted inline. See `REQUIREMENTS.md` for what it must do.
+Status: **implemented as described** (2026-10-16). Deviations are noted inline. See `REQUIREMENTS.md` for what it must do.
 
 ## 1. Shape of the system
 
@@ -56,14 +56,14 @@ types.ts      Player, GameConfig, GameState, Event union
 reducer.ts    reduce(state, event) → state        (the only way state changes)
 clock.ts      elapsedInPeriod(state, now), timeRemaining(state, now)
 playtime.ts   totalPlayed(player, state, now), currentStint(...)
-fairness.ts   nextOffQueue(state, now), nextOnQueue(state, now), recommendedSwap(state, now, S)
+fairness.ts   nextOffQueue(state), nextOnQueue(state), recommendedSwap(state)   (the rotation order)
 schedule.ts   defaultInterval(config, remaining), nextSubAt(state), projectedMinutes(state, now)
 summary.ts    endOfGameReport(state)
 ```
 
 **Events** (all carry `at: number` ms epoch): `GameConfigured`, `LineupSet`,
 `PeriodStarted`, `Paused`, `Resumed`, `PeriodEnded`, `SubMade {off[], on[]}`,
-`PlayerMoved {id, to}`, `AvailabilityChanged`, `ClockAdjusted {deltaMs}`,
+`PlayerMoved {id, to}`, `AvailabilityChanged`, `PeriodAdjusted {deltaMs}`,
 `Undo` (implemented as popping the log and re-reducing).
 
 **Time model.** A player's total time on field = Σ over their on-field segments of
@@ -128,8 +128,44 @@ Implemented in the engine, all pure and unit-tested:
   incremented on `SubMade` while running or paused) and `PlayerClock.periodPlayedMs`.
 - `schedule.ts`: `effectiveSwapSize`, `subsPerPeriod` per scope, `plannedIntervalMs`.
 - `derive.ts`: `nextSubDueGameMs` = anchor + (period end − anchor) / (remaining in-play subs + 1);
-  queues sort by `[scope minutes, game minutes, stint]`; `fairnessBoundMs`.
+  `fairnessBoundMs`. (This step's minutes-based queue sort was later replaced by the rotation
+  order, §9.)
 - `project.ts`: `projectPeriod(config, n)` plays one period on paper with the engine's own
   recommendations and returns slots, interval and each player's minutes.
 - Settings UI: rotation select plus a readout of subs a period, interval and the projected
   minutes range, with a warning under two minutes. Settings storage moved to `lb.settings.v2` with a one-off migration.
+
+## 9. The rotation order, Sub-next and period corrections (REQUIREMENTS F2.6, F3.1, F4.3, F4.5)
+
+- `GameState.players` is the rotation order. `derive.nextOffQueue(state)` /
+  `nextOnQueue(state)` are simply the field / sideline players in that order, and
+  `recommendedSwap(state)` takes the front of each after the field-count correction. There is
+  no `now`: minutes never reorder anyone.
+- The reducer keeps the order rotating. `SubMade` and `PlayerMoved` end with
+  `rotated(state, moves)`: whoever joined the field goes just after the last player still on
+  the field (back of the field order); whoever left the field goes to the end of the roster
+  (back of the sideline order); whoever came back from `out` to the sideline goes to the
+  field/sideline boundary (front of the sideline order). Nobody else moves, so a mix-up
+  changes the order once and the change sticks.
+- `LineupOrdered { order }` replaces the roster order wholesale (unknown ids ignored,
+  duplicates dropped, anyone left out appended). `derive.reorderedLineup(state, id, ±1)` (one
+  place within her column) and `derive.promotedLineup(state, id)` (to the front of her column)
+  return the order to dispatch, or null when nothing would change. `Board.svelte` offers
+  _Sub off next_ / _Sub on next_ and _Earlier_ / _Later_ on every expanded card in every
+  phase but `finished`. The first cut's screen-state "picks" and the
+  `recommendedSwap(…, picks)` parameter are gone: a pick is an order change like any other,
+  in the event log and undoable.
+- `PeriodAdjusted { deltaMs }` changes `GameState.periodAdjustMs`, the delta on the configured
+  length of the current (or, in `pre`/`break`, the next) period; `PeriodEnded` resets it. It is
+  clamped so the period is never shorter than the time played in it, or than a minute.
+  `derive.periodLengthMs(state)` = configured length + delta, and `subsPerPeriodNow` /
+  `plannedIntervalNowMs` pass that length to `schedule.subsPerPeriod` / `plannedIntervalMs`
+  (which take an optional `P`), so the interval and `nextSubDueGameMs` follow the new length
+  with no other change. `scheduledGameMs` (actual completed periods + current adjusted + rest
+  configured) feeds `targetPlayedMs` and `gameRemainingMs`. The UI's ±30 s dispatch this event
+  in every phase but `finished`; the header's idle clock shows the adjusted length. The former
+  `ClockAdjusted` (shift elapsed time) is gone; the reducer skips unknown event types so an
+  old saved log still loads.
+- `PlayerCard.svelte` renders optional rows of `actions` above the move buttons.
+  `scripts/e2e.sh` exercises ordering before and during play, promotion and a shortened
+  period.

@@ -1,18 +1,13 @@
 // Read-only views over GameState at a given wall-clock instant. Nothing here mutates.
 import type { GameState, Location, PlayerId } from './types';
 import { gameElapsedMs } from './reducer';
-import {
-  effectiveSwapSize,
-  periodMs,
-  plannedIntervalMs,
-  subsPerPeriod,
-  totalGameMs,
-} from './schedule';
+import { effectiveSwapSize, periodMs, plannedIntervalMs, subsPerPeriod } from './schedule';
 
 export { gameElapsedMs };
 
+/** Length of the current (or next) period: the configured length plus the coach's adjustment. */
 export function periodLengthMs(state: GameState): number {
-  return periodMs(state.config);
+  return periodMs(state.config) + (state.periodAdjustMs ?? 0);
 }
 
 export function periodElapsedMs(state: GameState, now: number): number {
@@ -25,9 +20,22 @@ export function periodRemainingMs(state: GameState, now: number): number {
   return periodLengthMs(state) - periodElapsedMs(state, now);
 }
 
+/**
+ * Scheduled game time: periods already played at their actual length, the current (or next)
+ * one at its adjusted length, any after it at the configured length.
+ */
+export function scheduledGameMs(state: GameState): number {
+  const inPlay = state.phase === 'running' || state.phase === 'paused';
+  const done = inPlay ? state.period - 1 : state.period;
+  const left = Math.max(0, state.config.periods - done);
+  if (left === 0) return state.completedPeriodsMs;
+  // The current (or next) period at its adjusted length, any after it as configured.
+  return state.completedPeriodsMs + periodLengthMs(state) + (left - 1) * periodMs(state.config);
+}
+
 /** Scheduled game time not yet played (ignores overtime). */
 export function gameRemainingMs(state: GameState, now: number): number {
-  return Math.max(0, totalGameMs(state.config) - gameElapsedMs(state, now));
+  return Math.max(0, scheduledGameMs(state) - gameElapsedMs(state, now));
 }
 
 function runningMs(state: GameState, id: PlayerId, now: number): number {
@@ -46,13 +54,6 @@ export function periodPlayedMs(state: GameState, id: PlayerId, now: number): num
   return clock ? clock.periodPlayedMs + runningMs(state, id, now) : 0;
 }
 
-/** The minutes fairness is judged on: this period's in period scope, the game's otherwise. */
-export function scopePlayedMs(state: GameState, id: PlayerId, now: number): number {
-  return state.config.rotationScope === 'period'
-    ? periodPlayedMs(state, id, now)
-    : totalPlayedMs(state, id, now);
-}
-
 /** How long the player has been where they are now, in game-clock ms. */
 export function currentStintMs(state: GameState, id: PlayerId, now: number): number {
   const clock = state.clocks[id];
@@ -68,14 +69,14 @@ export function availableCount(state: GameState): number {
   return state.players.filter((p) => state.location[p.id] !== 'out').length;
 }
 
-/** Substitution slots per period for the players available right now. */
+/** Substitution slots per period for the players available and the period length right now. */
 export function subsPerPeriodNow(state: GameState): number {
-  return subsPerPeriod(state.config, availableCount(state));
+  return subsPerPeriod(state.config, availableCount(state), periodLengthMs(state));
 }
 
-/** Time between subs when nothing goes wrong, for the players available right now. */
+/** Time between subs when nothing goes wrong, for the players and period length right now. */
 export function plannedIntervalNowMs(state: GameState): number {
-  return plannedIntervalMs(state.config, availableCount(state));
+  return plannedIntervalMs(state.config, availableCount(state), periodLengthMs(state));
 }
 
 /**
@@ -115,7 +116,7 @@ export function subCountdownMs(state: GameState, now: number): number | null {
 export function targetPlayedMs(state: GameState): number {
   const n = availableCount(state);
   if (n === 0) return 0;
-  return (Math.min(state.config.onField, n) * totalGameMs(state.config)) / n;
+  return (Math.min(state.config.onField, n) * scheduledGameMs(state)) / n;
 }
 
 /** Greedy min–max keeps everyone within one bench stint: this many ms. */
@@ -127,24 +128,14 @@ export function fairnessBoundMs(state: GameState): number {
   return Math.ceil(Math.max(1, bench) / swap) * plannedIntervalNowMs(state);
 }
 
-/** On-field players, most-played first (scope minutes, then game minutes, then stint). */
-export function nextOffQueue(state: GameState, now: number): PlayerId[] {
-  return playersAt(state, 'field').sort(
-    (a, b) =>
-      scopePlayedMs(state, b, now) - scopePlayedMs(state, a, now) ||
-      totalPlayedMs(state, b, now) - totalPlayedMs(state, a, now) ||
-      currentStintMs(state, b, now) - currentStintMs(state, a, now),
-  );
+/** On-field players in rotation order: the first comes off next. */
+export function nextOffQueue(state: GameState): PlayerId[] {
+  return playersAt(state, 'field');
 }
 
-/** Sideline players, least-played first; ties broken by longest time on the bench. */
-export function nextOnQueue(state: GameState, now: number): PlayerId[] {
-  return playersAt(state, 'bench').sort(
-    (a, b) =>
-      scopePlayedMs(state, a, now) - scopePlayedMs(state, b, now) ||
-      totalPlayedMs(state, a, now) - totalPlayedMs(state, b, now) ||
-      currentStintMs(state, b, now) - currentStintMs(state, a, now),
-  );
+/** Sideline players in rotation order: the first goes on next. */
+export function nextOnQueue(state: GameState): PlayerId[] {
+  return playersAt(state, 'bench');
 }
 
 export interface Swap {
@@ -153,12 +144,13 @@ export interface Swap {
 }
 
 /**
- * The swap the engine recommends right now. Corrects the field count first (injuries,
- * manual moves), then rotates `swapSize` players if the bench allows it.
+ * The swap the engine recommends right now: the front of each column. Corrects the field
+ * count first (injuries, manual moves), then rotates `swapSize` players if the bench allows
+ * it. Minutes play no part: the order is the order, and the reducer keeps it rotating.
  */
-export function recommendedSwap(state: GameState, now: number): Swap {
-  const offQ = nextOffQueue(state, now);
-  const onQ = nextOnQueue(state, now);
+export function recommendedSwap(state: GameState): Swap {
+  const offQ = nextOffQueue(state);
+  const onQ = nextOnQueue(state);
   const deficit = state.config.onField - offQ.length; // >0 short-handed, <0 too many
   const rotate = Math.min(state.config.swapSize, onQ.length, offQ.length);
   let onCount = Math.min(onQ.length, rotate + Math.max(0, deficit));
@@ -167,6 +159,49 @@ export function recommendedSwap(state: GameState, now: number): Swap {
   if (deficit > 0) offCount = Math.max(0, Math.min(offCount, onCount - deficit));
   if (deficit < 0) onCount = Math.max(0, Math.min(onCount, offCount + deficit));
   return { off: offQ.slice(0, offCount), on: onQ.slice(0, onCount) };
+}
+
+function columnOf(state: GameState, id: PlayerId): PlayerId[] | null {
+  const where = state.location[id];
+  if (where === 'field') return nextOffQueue(state);
+  if (where === 'bench') return nextOnQueue(state);
+  return null;
+}
+
+/**
+ * Rotation order after moving `id` one place earlier (−1) or later (+1) in her column. Null
+ * when she is already at that end of the column, or not on the field or sideline.
+ */
+export function reorderedLineup(
+  state: GameState,
+  id: PlayerId,
+  direction: -1 | 1,
+): PlayerId[] | null {
+  const column = columnOf(state, id);
+  if (column === null) return null;
+  const i = column.indexOf(id);
+  const j = i + direction;
+  if (i < 0 || j < 0 || j >= column.length) return null;
+  const other = column[j]!;
+  const order = state.players.map((p) => p.id);
+  const a = order.indexOf(id);
+  const b = order.indexOf(other);
+  order[a] = other;
+  order[b] = id;
+  return order;
+}
+
+/**
+ * Rotation order after moving `id` to the front of her column: "sub her off (or on) next".
+ * The rest of the column keeps its order. Null when she is already first, or not on the
+ * field or sideline.
+ */
+export function promotedLineup(state: GameState, id: PlayerId): PlayerId[] | null {
+  const column = columnOf(state, id);
+  if (column === null || column[0] === id) return null;
+  const order = state.players.map((p) => p.id).filter((x) => x !== id);
+  order.splice(order.indexOf(column[0]!), 0, id);
+  return order;
 }
 
 export interface PlayerSummary {

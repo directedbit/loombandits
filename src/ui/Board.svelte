@@ -9,23 +9,29 @@
     type PlayerId,
     type Swap,
   } from '../engine';
-  import PlayerCard from './PlayerCard.svelte';
+  import PlayerCard, { type CardAction } from './PlayerCard.svelte';
 
   interface Props {
     gameState: GameState;
     now: number;
     swap: Swap;
     onMove: (id: PlayerId, to: Location) => void;
+    /** Move a player one place earlier (−1) or later (+1) in her column's order. */
+    onReorder: (id: PlayerId, direction: -1 | 1) => void;
+    /** Move a player to the front of her column: she is subbed off (or on) next. */
+    onPromote: (id: PlayerId) => void;
   }
 
-  let { gameState, now, swap, onMove }: Props = $props();
+  let { gameState, now, swap, onMove, onReorder, onPromote }: Props = $props();
 
   const names = $derived(new Map(gameState.players.map((p) => [p.id, p.name])));
   const name = (id: PlayerId) => names.get(id) ?? id;
 
-  const field = $derived(nextOffQueue(gameState, now));
-  const bench = $derived(nextOnQueue(gameState, now));
+  const field = $derived(nextOffQueue(gameState));
+  const bench = $derived(nextOnQueue(gameState));
   const out = $derived(playersAt(gameState, 'out').sort((a, b) => name(a).localeCompare(name(b))));
+
+  const canOrder = $derived(gameState.phase !== 'finished');
 
   let showOut = $state(true);
   let selected = $state<PlayerId | null>(null);
@@ -36,6 +42,32 @@
   function move(id: PlayerId, to: Location) {
     selected = null;
     onMove(id, to);
+  }
+
+  /**
+   * Expanded-card actions: change the order, in any phase but finished. The column is the
+   * order, so "next" is the front of it and Earlier/Later move one place.
+   */
+  function actions(
+    id: PlayerId,
+    side: 'off' | 'on',
+    index: number,
+    length: number,
+  ): CardAction[][] {
+    if (!canOrder) return [];
+    return [
+      [
+        {
+          label: side === 'off' ? 'Sub off next' : 'Sub on next',
+          disabled: index === 0,
+          onClick: () => onPromote(id),
+        },
+      ],
+      [
+        { label: '▲ Earlier', disabled: index === 0, onClick: () => onReorder(id, -1) },
+        { label: '▼ Later', disabled: index === length - 1, onClick: () => onReorder(id, 1) },
+      ],
+    ];
   }
 
   const fieldMoves: Array<[Location, string]> = [
@@ -62,6 +94,7 @@
         badge={swap.on.includes(id) ? 'on' : null}
         rank={i + 1}
         expanded={selected === id}
+        actions={actions(id, 'on', i, bench.length)}
         moves={benchMoves}
         onToggle={() => toggle(id)}
         onMove={(to) => move(id, to)}
@@ -80,6 +113,7 @@
         badge={swap.off.includes(id) ? 'off' : null}
         rank={i + 1}
         expanded={selected === id}
+        actions={actions(id, 'off', i, field.length)}
         moves={fieldMoves}
         onToggle={() => toggle(id)}
         onMove={(to) => move(id, to)}

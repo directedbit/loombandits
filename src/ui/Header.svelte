@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { formatClock, periodRemainingMs, subCountdownMs, type GameState } from '../engine';
+  import {
+    formatClock,
+    periodLengthMs,
+    periodRemainingMs,
+    subCountdownMs,
+    type GameState,
+  } from '../engine';
 
   let { gameState, now }: { gameState: GameState; now: number } = $props();
 
@@ -26,7 +32,7 @@
       ? '0:00'
       : live
         ? formatClock(remaining)
-        : formatClock(gameState.config.periodMinutes * 60_000),
+        : formatClock(periodLengthMs(gameState)),
   );
 </script>
 

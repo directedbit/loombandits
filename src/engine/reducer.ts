@@ -1,4 +1,13 @@
-import type { GameConfig, GameEvent, GameState, Location, PlayerClock, PlayerId } from './types';
+import type {
+  GameConfig,
+  GameEvent,
+  GameState,
+  Location,
+  Player,
+  PlayerClock,
+  PlayerId,
+} from './types';
+import { MINUTE_MS, periodMs } from './schedule';
 
 /** Game-clock ms at a given wall-clock instant. */
 export function gameElapsedMs(state: GameState, now: number): number {
@@ -75,6 +84,47 @@ function moveOne(state: GameState, id: PlayerId, to: Location, gameMs: number): 
   };
 }
 
+interface Move {
+  id: PlayerId;
+  from: Location | undefined;
+  to: Location;
+}
+
+/**
+ * The rotation order after `moves` (already applied to `state.location`). Whoever joins the
+ * field goes to the back of the field order: she is the freshest. Whoever leaves the field
+ * goes to the back of the sideline order: she has just come off. Whoever joins the sideline
+ * from not-playing goes to its front: she has had nothing yet. Nobody else moves, so a
+ * mix-up changes the order once and the change sticks.
+ */
+function rotated(state: GameState, moves: Move[]): Player[] {
+  const toFieldBack: PlayerId[] = [];
+  const toBenchFront: PlayerId[] = [];
+  const toBenchBack: PlayerId[] = [];
+  for (const m of moves) {
+    if (m.from === undefined || m.from === m.to) continue;
+    if (m.to === 'field') toFieldBack.push(m.id);
+    else if (m.to === 'bench') (m.from === 'field' ? toBenchBack : toBenchFront).push(m.id);
+  }
+  const moved = new Set([...toFieldBack, ...toBenchFront, ...toBenchBack]);
+  if (moved.size === 0) return state.players;
+  const byId = new Map(state.players.map((p) => [p.id, p]));
+  const pick = (ids: PlayerId[]) => ids.map((id) => byId.get(id)!);
+  const rest = state.players.filter((p) => !moved.has(p.id));
+  // The field/sideline boundary: just after the last player still on the field.
+  let cut = 0;
+  rest.forEach((p, i) => {
+    if (state.location[p.id] === 'field') cut = i + 1;
+  });
+  return [
+    ...rest.slice(0, cut),
+    ...pick(toFieldBack),
+    ...pick(toBenchFront),
+    ...rest.slice(cut),
+    ...pick(toBenchBack),
+  ];
+}
+
 /** The only way state changes. Pure: same inputs, same output. */
 export function reduce(state: GameState | null, event: GameEvent): GameState {
   if (event.type === 'GameCreated') {
@@ -97,6 +147,7 @@ export function reduce(state: GameState | null, event: GameEvent): GameState {
       runningSince: null,
       subAnchorGameMs: 0,
       inPlaySubsThisPeriod: 0,
+      periodAdjustMs: 0,
     };
   }
   if (state === null) {
@@ -147,6 +198,9 @@ export function reduce(state: GameState | null, event: GameEvent): GameState {
         periodElapsedMs: 0,
         runningSince: null,
         phase: finished ? 'finished' : 'break',
+        // A shortened half does not carry over: the next period is the configured length
+        // until the coach adjusts it (which they can do at the break).
+        periodAdjustMs: 0,
       };
     }
     case 'SubMade': {
@@ -154,8 +208,12 @@ export function reduce(state: GameState | null, event: GameEvent): GameState {
       const inPlay = state.phase === 'running' || state.phase === 'paused';
       let next = settle(state, event.at);
       const gameMs = gameElapsedMs(next, event.at);
-      for (const id of event.off) next = moveOne(next, id, 'bench', gameMs);
-      for (const id of event.on) next = moveOne(next, id, 'field', gameMs);
+      const moves: Move[] = [
+        ...event.off.map((id) => ({ id, from: next.location[id], to: 'bench' as Location })),
+        ...event.on.map((id) => ({ id, from: next.location[id], to: 'field' as Location })),
+      ];
+      for (const m of moves) next = moveOne(next, m.id, m.to, gameMs);
+      next = { ...next, players: rotated(next, moves) };
       if (state.phase === 'pre') return next;
       return {
         ...next,
@@ -164,17 +222,34 @@ export function reduce(state: GameState | null, event: GameEvent): GameState {
       };
     }
     case 'PlayerMoved': {
-      const next = settle(state, event.at);
-      return moveOne(next, event.id, event.to, gameElapsedMs(next, event.at));
+      const settled = settle(state, event.at);
+      const move: Move = { id: event.id, from: settled.location[event.id], to: event.to };
+      const next = moveOne(settled, event.id, event.to, gameElapsedMs(settled, event.at));
+      return { ...next, players: rotated(next, [move]) };
     }
-    case 'ClockAdjusted': {
-      const next = settle(state, event.at);
-      const elapsed = Math.max(0, next.periodElapsedMs + event.deltaMs);
-      const applied = elapsed - next.periodElapsedMs;
-      return { ...next, clocks: creditField(next, applied), periodElapsedMs: elapsed };
+    case 'PeriodAdjusted': {
+      // The period's length changes; nothing that has happened changes. The plan is derived
+      // from the length, so the remaining subs re-spread over the new time left. A period is
+      // never shorter than the time already played in it, nor than one minute.
+      if (state.phase === 'finished') return state;
+      const running = state.runningSince === null ? 0 : Math.max(0, event.at - state.runningSince);
+      const elapsed = state.periodElapsedMs + running;
+      const floor = Math.max(MINUTE_MS, elapsed) - periodMs(state.config);
+      return { ...state, periodAdjustMs: Math.max(floor, state.periodAdjustMs + event.deltaMs) };
+    }
+    case 'LineupOrdered': {
+      const byId = new Map(state.players.map((p) => [p.id, p]));
+      const ordered = event.order.filter((id, i) => byId.has(id) && event.order.indexOf(id) === i);
+      const rest = state.players.filter((p) => !ordered.includes(p.id));
+      return { ...state, players: [...ordered.map((id) => byId.get(id)!), ...rest] };
     }
     case 'ConfigChanged': {
       return { ...state, config: normalizeConfig(event.config) };
+    }
+    default: {
+      // An event type this build no longer knows (a log saved by an older version): skip it
+      // rather than lose the whole game.
+      return state;
     }
   }
 }
