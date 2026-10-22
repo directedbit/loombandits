@@ -4,3 +4,4 @@ dist/
 *.log
 dev-dist/
 e2e/screenshots/
+session.txt
